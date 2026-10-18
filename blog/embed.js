@@ -5,6 +5,9 @@
 import { themes } from '../animations/lib/theme.js';
 
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// On narrow screens the text panel inside the canvas would be scaled to a few pixels, so draw the
+// clean variant (no panel, as in the paper stills) cropped to the plot. The caption carries the text.
+const narrowQuery = matchMedia('(max-width: 640px)');
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
 const players = new Set();
 
@@ -20,6 +23,7 @@ function onThemeChange() {
 }
 new MutationObserver(onThemeChange).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 darkQuery.addEventListener('change', onThemeChange);
+narrowQuery.addEventListener('change', () => { for (const p of players) p.relayout(); });
 
 async function create(fig) {
   const id = fig.dataset.anim;
@@ -32,13 +36,21 @@ async function create(fig) {
   canvas.className = 'anim-canvas';
   canvas.setAttribute('role', 'img');
   canvas.setAttribute('aria-label', anim.title);
-  canvas.width = W * dpr;
-  canvas.height = H * dpr;
   stage.replaceChildren(canvas);
   const ctx = canvas.getContext('2d');
 
   const env = { W, H, dpr, clean: false, params: new URLSearchParams(), theme: themes[themeName()] };
-  const state = anim.setup ? anim.setup(env) : {};
+  let state, view;
+  // view is the visible region of the 1600x900 frame: the whole frame, or anim.crop in compact mode.
+  function layout() {
+    env.clean = narrowQuery.matches && !!anim.crop;
+    view = env.clean ? anim.crop : { x: 0, y: 0, w: W, h: H };
+    stage.style.aspectRatio = `${view.w} / ${view.h}`;
+    canvas.width = view.w * dpr;
+    canvas.height = view.h * dpr;
+    state = anim.setup ? anim.setup(env) : {};
+  }
+  layout();
 
   let t = 0, playing = false, visible = false, wantPlay = !reduceMotion, last = null, raf = 0, released = false;
 
@@ -72,7 +84,7 @@ async function create(fig) {
 
   function render() {
     if (released) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, -view.x * dpr, -view.y * dpr);
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
     ctx.fillStyle = env.theme.bg;
@@ -124,7 +136,8 @@ async function create(fig) {
     },
     // Free the backing store of far-away canvases to bound memory with 17 players on one page.
     release() { if (!released) { released = true; canvas.width = 1; canvas.height = 1; } },
-    restore() { if (released) { released = false; canvas.width = W * dpr; canvas.height = H * dpr; render(); } },
+    restore() { if (released) { released = false; canvas.width = view.w * dpr; canvas.height = view.h * dpr; render(); } },
+    relayout() { if (env.clean !== (narrowQuery.matches && !!anim.crop)) { layout(); if (released) { canvas.width = 1; canvas.height = 1; } render(); } },
     pauseHidden() { updatePlaying(); },
     render,
   };

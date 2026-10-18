@@ -66,6 +66,14 @@
   .bar .name { font: 600 15px/1 var(--head); color: var(--fg); text-decoration: none; white-space: nowrap; }
   .bar nav { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   .bar nav::-webkit-scrollbar { display: none; }
+  /* Fade the edge that has more links beyond it, so it is clear the list scrolls. */
+  .bar nav {
+    --fl: 0px; --fr: 0px;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent);
+  }
+  .bar nav.more-l { --fl: 32px; }
+  .bar nav.more-r { --fr: 32px; }
   .bar nav ol { list-style: none; margin: 0; padding: 0; display: flex; gap: 2px; }
   .bar nav a {
     display: block; padding: 6px 10px; border-radius: 6px; white-space: nowrap;
@@ -167,6 +175,10 @@
     .bar .name { display: none; }
     .anim-controls .time { min-width: 0; }
     figure.anim { margin: 26px auto 32px; }
+  }
+  /* embed.js draws the cropped plot without its text panel below this width (most crops are about 10:9). */
+  @media (max-width: 640px) {
+    .anim-stage { aspect-ratio: 10 / 9; }
   }
   @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 </style>
@@ -518,6 +530,15 @@
     }
   }, { rootMargin: '-45% 0px -50% 0px' });
   document.querySelectorAll('section.stage, header.mast').forEach((s) => spy.observe(s));
+
+  const nav = document.querySelector('.bar nav');
+  const edges = () => {
+    nav.classList.toggle('more-l', nav.scrollLeft > 2);
+    nav.classList.toggle('more-r', nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 2);
+  };
+  nav.addEventListener('scroll', edges, { passive: true });
+  addEventListener('resize', edges);
+  edges();
 
   mountAll();
 </script>
