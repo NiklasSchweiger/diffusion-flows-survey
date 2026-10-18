@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Diffusion, Flows and Beyond</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&family=Schibsted+Grotesk:wght@500;600;700&display=swap">
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+    svg: { fontCache: 'global' },
+    options: { skipHtmlTags: ['script', 'style', 'textarea', 'canvas', 'button'] },
+  };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #151a24; --muted: #5d6678; --faint: #8b93a3;
+    --line: rgba(21, 26, 36, 0.13); --chip: rgba(21, 26, 36, 0.045);
+    --accent: #0369a1; --accent-2: #5b45e0; --mark: #d61f78;
+    --panel: #f5f6f9;
+    --serif: "Literata", Georgia, serif;
+    --head: "Schibsted Grotesk", "Helvetica Neue", system-ui, sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0a0e17; --fg: #e8ecf4; --muted: #9aa3b6; --faint: #6c7589;
+      --line: rgba(232, 236, 244, 0.13); --chip: rgba(232, 236, 244, 0.06);
+      --accent: #7dd3fc; --accent-2: #9b8fff; --mark: #ff4fa3;
+      --panel: #111727;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0a0e17; --fg: #e8ecf4; --muted: #9aa3b6; --faint: #6c7589;
+    --line: rgba(232, 236, 244, 0.13); --chip: rgba(232, 236, 244, 0.06);
+    --accent: #7dd3fc; --accent-2: #9b8fff; --mark: #ff4fa3;
+    --panel: #111727;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-padding-top: 64px; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 18px/1.68 var(--serif); font-optical-sizing: auto;
+    overflow-wrap: break-word;
+  }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .gutter {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  /* Top bar */
+  .bar {
+    position: sticky; top: 0; z-index: 10; background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .bar-in { max-width: 1160px; margin: 0 auto; display: flex; align-items: center; gap: 16px; height: 52px; }
+  .bar .name { font: 600 15px/1 var(--head); color: var(--fg); text-decoration: none; white-space: nowrap; }
+  .bar nav { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .bar nav::-webkit-scrollbar { display: none; }
+  .bar nav ol { list-style: none; margin: 0; padding: 0; display: flex; gap: 2px; }
+  .bar nav a {
+    display: block; padding: 6px 10px; border-radius: 6px; white-space: nowrap;
+    font: 500 13.5px/1 var(--head); color: var(--muted); text-decoration: none;
+  }
+  .bar nav a span { font: 500 11px/1 var(--mono); color: var(--faint); margin-right: 6px; }
+  .bar nav a:hover, .bar nav a.here { color: var(--fg); background: var(--chip); }
+  .icon-btn {
+    flex: none; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line);
+    background: transparent; color: var(--fg); cursor: pointer; display: grid; place-items: center;
+  }
+  .icon-btn svg { width: 17px; height: 17px; }
+
+  /* Masthead */
+  header.mast { max-width: 1160px; margin: 0 auto; padding-top: 64px; padding-bottom: 8px; }
+  .kicker { font: 500 12.5px/1.4 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin: 0 0 18px; }
+  h1 {
+    font: 700 clamp(36px, 6.4vw, 68px)/1.02 var(--head); letter-spacing: -0.025em; margin: 0;
+    max-width: 14ch;
+  }
+  .sub { font: 500 clamp(18px, 2.2vw, 23px)/1.35 var(--head); color: var(--muted); margin: 18px 0 0; max-width: 38ch; letter-spacing: -0.005em; }
+  .byline { margin: 28px 0 0; font: 14px/1.5 var(--mono); color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 20px; }
+  .byline a { color: var(--fg); }
+
+  /* Reading column and wide figures */
+  main { padding-bottom: 96px; }
+  .col { max-width: 680px; margin: 0 auto; }
+  .wide { max-width: 1160px; margin: 0 auto; }
+  .col p { margin: 0 0 1.05em; }
+  .lede { font-size: 20px; line-height: 1.6; }
+  section.stage { padding-top: 56px; }
+  .stage-head { max-width: 1160px; margin: 0 auto 22px; display: grid; grid-template-columns: 1fr; gap: 6px; }
+  .stage-num { font: 500 12.5px/1 var(--mono); color: var(--mark); letter-spacing: 0.06em; text-transform: uppercase; }
+  h2 { font: 700 clamp(28px, 4vw, 40px)/1.1 var(--head); letter-spacing: -0.02em; margin: 0; }
+  h3 { font: 600 21px/1.3 var(--head); letter-spacing: -0.01em; margin: 1.8em 0 0.5em; }
+  .rule { max-width: 1160px; margin: 0 auto; border: 0; border-top: 1px solid var(--line); }
+  .paper-link {
+    display: inline-flex; align-items: baseline; gap: 8px; font: 500 13px/1.4 var(--mono);
+    color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--line); padding-bottom: 1px;
+  }
+  .paper-link b { color: var(--accent); font-weight: 500; white-space: nowrap; }
+  @media (max-width: 720px) { .paper-link { display: inline; line-height: 1.7; } }
+  .paper-link:hover { color: var(--fg); border-color: var(--accent); }
+  mjx-container[display="true"] { margin: 1.1em 0 !important; overflow-x: auto; overflow-y: hidden; max-width: 100%; }
+  mjx-container { font-size: 103% !important; }
+
+  .note {
+    background: var(--panel); border-radius: 10px; padding: 18px 20px; margin: 1.6em 0;
+    font: 15.5px/1.6 var(--head); color: var(--muted);
+  }
+  .note strong { color: var(--fg); font-weight: 600; }
+  .note p { margin: 0 0 0.6em; }
+  .note p:last-child { margin: 0; }
+
+  /* Animation figures */
+  figure.anim { margin: 34px auto 40px; max-width: 1160px; outline: none; }
+  .anim-stage {
+    aspect-ratio: 16 / 9; width: 100%; border-radius: 10px; border: 1px solid var(--line);
+    overflow: hidden; background: var(--bg); display: grid; place-items: center;
+    font: 13px/1.4 var(--mono); color: var(--faint);
+  }
+  .anim-canvas { display: block; width: 100%; height: 100%; cursor: pointer; }
+  figure.anim:focus-visible .anim-stage { border-color: var(--accent); }
+  .anim-controls { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  .anim-controls button {
+    flex: none; width: 40px; height: 32px; border-radius: 6px; border: 1px solid var(--line);
+    background: var(--chip); color: var(--fg); font: 13px/1 var(--head); cursor: pointer;
+  }
+  .anim-controls .scrub { flex: 1; min-width: 0; accent-color: var(--accent-2); }
+  .anim-controls .time { flex: none; font: 12.5px/1 var(--mono); color: var(--muted); min-width: 88px; text-align: right; font-variant-numeric: tabular-nums; }
+  .anim-chapters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .anim-chapters button {
+    background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 999px;
+    padding: 4px 11px; font: 12.5px/1.3 var(--head); cursor: pointer;
+  }
+  .anim-chapters button:hover { color: var(--fg); }
+  .anim-chapters button.on { color: var(--fg); border-color: var(--accent-2); }
+  figcaption {
+    max-width: 680px; margin: 16px auto 0; font: 15px/1.6 var(--head); color: var(--muted);
+  }
+  figcaption .tag { font: 500 12.5px/1 var(--mono); color: var(--fg); margin-right: 8px; letter-spacing: 0.02em; }
+  figcaption .paper-link { margin-top: 10px; }
+  figcaption p { margin: 0 0 0.5em; }
+
+  /* Open problems */
+  .problems { list-style: none; padding: 0; margin: 28px 0 0; counter-reset: p; }
+  .problems li { padding: 22px 0; border-top: 1px solid var(--line); counter-increment: p; }
+  .problems li:last-child { border-bottom: 1px solid var(--line); }
+  .problems h3 { margin: 0 0 8px; display: flex; gap: 12px; align-items: baseline; }
+  .problems h3::before { content: "8." counter(p); font: 500 13px/1 var(--mono); color: var(--mark); }
+  .problems p { margin: 0 0 10px; }
+
+  footer { max-width: 680px; margin: 0 auto; padding-bottom: 64px; font: 14px/1.6 var(--head); color: var(--muted); }
+
+  @media (max-width: 720px) {
+    body { font-size: 17px; }
+    .lede { font-size: 18.5px; }
+    header.mast { padding-top: 40px; }
+    .bar .name { display: none; }
+    .anim-controls .time { min-width: 0; }
+    figure.anim { margin: 26px auto 32px; }
+  }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+<div class="bar gutter">
+  <div class="bar-in">
+    <a class="name" href="#top">Diffusion, Flows and Beyond</a>
+    <nav aria-label="Sections">
+      <ol>
+        <li><a href="#pretrain"><span>01</span>Pretrain</a></li>
+        <li><a href="#adapt"><span>02</span>Adapt</a></li>
+        <li><a href="#align"><span>03</span>Align</a></li>
+        <li><a href="#compress"><span>04</span>Compress</a></li>
+        <li><a href="#search"><span>05</span>Search</a></li>
+        <li><a href="#applications"><span>06</span>Applications</a></li>
+        <li><a href="#open"><span>07</span>Open problems</a></li>
+      </ol>
+    </nav>
+    <button class="icon-btn" id="theme" type="button" aria-label="Switch between light and dark theme">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>
+    </button>
+  </div>
+</div>
+
+<header class="mast gutter" id="top">
+  <p class="kicker">Web companion to the survey · Draft</p>
+  <h1>Diffusion, Flows and Beyond</h1>
+  <p class="sub">The lifecycle of a generative model, from pretraining to inference-time search, in seventeen animations.</p>
+  <p class="byline"><span>Niklas Schweiger</span><span>October 2026</span><a href="survey.pdf">Read the draft (PDF, 120 pages)</a></p>
+</header>
+
+<main>
+  <div class="col gutter" style="padding-top:40px">
+    <p class="lede">This page accompanies a survey of diffusion and flow models. It follows a model through five stages: pretraining, adaptation, alignment, compression and search. Each stage has one or more animations, and each animation links to the section of the paper that treats it in full.</p>
+    <p>Most animations use two-dimensional Gaussian mixtures. For a mixture of Gaussians the score, the velocity field and the posterior mean are available in closed form at every noise level, so the arrows and trajectories you see are the exact fields and not the output of a trained network. Where an animation uses something else, such as a trained network, a hand-written model or a schematic, the caption says so. The animations run in your browser from the same code that renders the figures in the paper.</p>
+    <div class="note">
+      <p><strong>Notation.</strong> Time runs from noise to data. At \(t=0\) the state is noise and at \(t=1\) it is data, with \(x_t=\alpha_t x_1+\sigma_t x_0\), \(x_0\sim\mathcal N(0,I)\) and \(x_1\) drawn from the data. Score-based diffusion and many image codebases use the opposite direction.</p>
+      <p><strong>Controls.</strong> An animation plays while it is on screen. Click the frame or the play button to pause, drag the slider to scrub, and use the chapter buttons to jump. After clicking a figure, the arrow keys step one second. On a narrow screen the text inside each frame is small, and the caption below it describes the same content.</p>
+    </div>
+    <p>One distribution connects the later stages. For a pretrained model \(p\), a reward \(r\) and a regularization weight \(\beta>0\), the distribution that maximizes the expected reward minus \(\beta\) times the KL divergence from \(p\) is the tilted distribution</p>
+    \[ p^\star(x)=\frac{1}{Z}\,p(x)\,e^{r(x)/\beta},\qquad Z=\mathbb E_p\big[e^{r(x)/\beta}\big]. \]
+    <p>Reward fine-tuning changes the weights of the model so that it samples from \(p^\star\). Guidance and stochastic optimal control change the drift of the sampler instead. Sequential Monte Carlo reaches \(p^\star\) by reweighting and resampling particles during sampling, and best-of-\(N\) reaches a closely related distribution by selection. Conditioning has the same form: with \(\beta=1\) and \(r(x)=\log p(y\mid x)\) the tilt is Bayes' rule. The routes differ in when the compute is spent and in what they need from the reward.</p>
+  </div>
+
+  <figure class="anim gutter" data-anim="lifecycle" id="a0">
+    <div class="anim-stage">A0 · The lifecycle</div>
+    <figcaption>
+      <p><span class="tag">A0</span>The whole lifecycle on one toy problem. The same 400 noise draws pass through every stage. A flow is pretrained on six Gaussians on a ring and integrated with 40 Heun steps. Fine-tuning adapts it to data with a seventh mode at the centre. Alignment tilts the model by \(e^{\lambda y}\), which shifts the mean of each Gaussian component by \(\lambda\sigma^2\) towards larger \(y\). Distillation replaces the 40-step ODE with the ideal one-step map, the flow map of the teacher. Search draws eight candidates per output and keeps the one that a verifier, here closeness to one chosen mode, scores highest. Every stage is an exact Gaussian mixture.</p>
+      <a class="paper-link" href="survey.pdf#page=4"><b>Paper §1</b> Introduction, p. 4</a>
+    </figcaption>
+  </figure>
+
+  <hr class="rule">
+
+  <!-- Stage 1 -->
+  <section class="stage" id="pretrain">
+    <div class="stage-head gutter"><span class="stage-num">Stage 01 · Pretraining</span><h2>Learning to move noise to data</h2></div>
+    <div class="col gutter">
+      <p>Flow matching trains a velocity field \(v_\theta(x,t)\) by regression. A noise sample \(x_0\) and a data sample \(x_1\) define a straight path \(x_t=t\,x_1+(1-t)\,x_0\), whose velocity is \(x_1-x_0\). The loss is</p>
+      \[ \mathcal L(\theta)=\mathbb E_{t,\,x_0,\,x_1}\,\big\lVert v_\theta(x_t,t)-(x_1-x_0)\big\rVert^2 , \]
+      <p>and its minimizer is the marginal velocity: the average of \(x_1-x_0\) over all pairs whose path passes through \(x_t\) at time \(t\). The straight paths of individual pairs cross each other. The paths of the marginal field cannot cross, because an ODE has a single velocity at each point, so they bend. Integrating the marginal field from noise produces samples from the data distribution, and an SDE with a matched noise term produces the same marginals along random paths.</p>
+    </div>
+    <figure class="anim gutter" data-anim="flow-matching" id="a1">
+      <div class="anim-stage">A1 · Flow matching</div>
+      <figcaption>
+        <p><span class="tag">A1</span>Conditional paths, the marginal ODE and an SDE with the same marginals. The data are a mixture of 110 Gaussians along a spiral. Under the linear path every marginal \(p_t\) is again a Gaussian mixture, so the marginal velocity, the score and the posterior means are exact. The ODE uses 240 Heun steps, and the SDE uses 320 Euler–Maruyama steps with \(g(t)=1.15\sqrt{1-t}\).</p>
+        <a class="paper-link" href="survey.pdf#page=14"><b>Paper §2.4</b> Flows and flow matching, p. 14</a>
+      </figcaption>
+    </figure>
+
+    <div class="col gutter">
+      <h3>Scores and Langevin dynamics</h3>
+      <p>Score-based models predate flow matching. They learn the score \(\nabla_x\log p_\sigma(x)\) of the data smoothed by Gaussian noise of scale \(\sigma\) and sample with Langevin dynamics, \(x\leftarrow x+h\,\nabla_x\log p_\sigma(x)+\sqrt{2h}\,\xi\). At a small \(\sigma\) the score is accurate near the data, but Langevin dynamics moves mass between separated regions very slowly. Annealing \(\sigma\) from large to small values first places the particles at a coarse scale and then refines them. The same idea, a continuum of noise levels, is what the SDE and flow formulations make precise.</p>
+    </div>
+    <figure class="anim gutter" data-anim="score-langevin" id="a2">
+      <div class="anim-stage">A2 · Scores and Langevin dynamics</div>
+      <figcaption>
+        <p><span class="tag">A2</span>The score of the smoothed spiral mixture is exact at every \(\sigma\). Langevin dynamics with 500 particles at a single \(\sigma=0.05\) leaves each particle on the arm nearest to its uniform start, so the inner fifth of the spiral receives 6% of the mass instead of 20%. Annealing over ten levels from \(\sigma=3\) to \(0.05\) with step size \(h=0.3\,\sigma^2\), as in NCSN, recovers the correct mass along the spiral.</p>
+        <a class="paper-link" href="survey.pdf#page=8"><b>Paper §2.1</b> Energies, scores and Langevin dynamics, p. 8</a>
+      </figcaption>
+    </figure>
+
+    <div class="col gutter">
+      <h3>From pixels to tokens</h3>
+      <p>Large image and video models do not denoise pixels directly. An autoencoder compresses the image into a smaller latent, the latent is cut into patches, and each patch becomes one token of a transformer. The number of tokens sets the cost of attention, which grows with the square of the sequence length. In MMDiT-style models the text tokens and the image tokens share one attention sequence, so each word can read from every patch.</p>
+    </div>
+    <figure class="anim gutter" data-anim="patchify-attend" id="a3">
+      <div class="anim-stage">A3 · Patchify and attend</div>
+      <figcaption>
+        <p><span class="tag">A3</span>A \(96\times96\) RGB image has 27,648 values. An autoencoder with \(8\times\) downsampling and 4 channels maps it to a \(12\times12\times4\) latent with 576 values, and \(2\times2\) patches turn the latent into 36 tokens. With the same factors a \(1024\times1024\) image gives 4,096 tokens. The encoder and the attention weights in this animation are hand-built for illustration.</p>
+        <a class="paper-link" href="survey.pdf#page=22"><b>Paper §2.8</b> Representations and architectures, p. 22</a>
+      </figcaption>
+    </figure>
+
+    <div class="col gutter">
+      <h3>Diffusion over discrete tokens</h3>
+      <p>Masked diffusion models for language start from a fully masked sequence and reveal tokens over several steps. At each step the model predicts a distribution for every masked position given the visible tokens. Revealing several positions at once is what makes decoding parallel, but the revealed tokens are sampled independently of each other. When two positions depend on each other, independent sampling can pick a combination that never occurs in the data.</p>
+    </div>
+    <figure class="anim gutter" data-anim="parallel-unmasking" id="a4">
+      <div class="anim-stage">A4 · Parallel unmasking</div>
+      <figcaption>
+        <p><span class="tag">A4</span>A toy language of 64 eight-token sentences with three coupled token pairs, so every conditional is exact and serves as the model. Revealing four tokens per step samples coupled tokens independently and produces sentences such as “owl barks”. Keeping only predictions with probability above \(\tau=0.35\) stays coherent in about three steps, at the cost of concentrating on the most probable sentences. Revealing the most confident positions first does not remove the failure.</p>
+        <a class="paper-link" href="survey.pdf#page=23"><b>Paper §2.9</b> Discrete and language diffusion, p. 23</a>
+      </figcaption>
+    </figure>
+
+    <div class="col gutter">
+      <h3>Guidance</h3>
+      <p>Classifier-free guidance combines a conditional and an unconditional prediction, \(v_w=v_u+w\,(v_c-v_u)\), and samples with \(w>1\). This extrapolates away from the unconditional model and makes samples more typical of the condition, but it also removes parts of the conditional distribution. Autoguidance keeps the same formula and replaces the unconditional model by a weaker version of the conditional model, The weaker model makes the same kind of errors more strongly, so extrapolating away from it reduces those errors.</p>
+    </div>
+    <figure class="anim gutter" data-anim="guidance-dial" id="a5">
+      <div class="anim-stage">A5 · The guidance dial</div>
+      <figcaption>
+        <p><span class="tag">A5</span>Two classes of 40 Gaussian components share a ring and overlap at its two ends. The conditional model for class A is too wide, with components of width 0.11, as a trained network would be. The weaker model used by autoguidance has width 0.18. At \(w=6\) classifier-free guidance pushes samples towards the centre of class A and drops the modes near the overlap. Autoguidance at \(w=3\) sharpens the samples and still reaches every class-A mode. Precision and coverage are measured from 500 samples per setting. The toy measures sample quality and coverage only, not prompt alignment.</p>
+        <a class="paper-link" href="survey.pdf#page=29"><b>Paper §2.11</b> Conditioning and guidance, p. 29</a>
+      </figcaption>
+    </figure>
+  </section>
+
+  <hr class="rule">
+
+  <!-- Stage 2 -->
+  <section class="stage" id="adapt">
+    <div class="stage-head gutter"><span class="stage-num">Stage 02 · Adaptation</span><h2>Changing a large model with few parameters</h2></div>
+    <div class="col gutter">
+      <p>A pretrained model is adapted to a new style, subject or form of control far more often than it is trained. Low-rank adaptation (LoRA) freezes a weight matrix \(W\in\mathbb R^{d\times d}\) and trains a product \(BA\) of a \(d\times r\) and an \(r\times d\) matrix, so the adapted weight \(W+BA\) differs from \(W\) by a matrix of rank at most \(r\). For \(r\ll d\) this trains \(2dr\) numbers instead of \(d^2\). Whether a low-rank update suffices depends on the change. The animation shows a case where it does, with a real trained network.</p>
+    </div>
+    <figure class="anim gutter" data-anim="lora-weight-space" id="a6">
+      <div class="anim-stage">A6 · LoRA in weight space</div>
+      <figcaption>
+        <p><span class="tag">A6</span>A flow-matching MLP with a \(64\times64\) hidden weight matrix \(W_2\) is pretrained on six Gaussians on a ring and fine-tuned on data in which one mode has moved to the origin. Updating all 4,096 entries of \(W_2\) moves that mode and keeps the other five. A rank-1 update with 128 trainable numbers gives the same samples. The unconstrained update is not itself low rank, since its top singular direction holds only 29% of \(\lVert\Delta W_2\rVert^2\). The networks are trained rather than exact, and all samples use the same noise.</p>
+        <a class="paper-link" href="survey.pdf#page=32"><b>Paper §3.1</b> Parameter-efficient fine-tuning, p. 32</a>
+      </figcaption>
+    </figure>
+  </section>
+
+  <hr class="rule">
+
+  <!-- Stage 3 -->
+  <section class="stage" id="align">
+    <div class="stage-head gutter"><span class="stage-num">Stage 03 · Alignment</span><h2>Fine-tuning towards a reward</h2></div>
+    <div class="col gutter">
+      <p>Alignment moves the model towards samples that score well under a reward, usually a learned model of human preference or an automatic check such as text rendering. With a KL penalty of weight \(\beta\) the optimal model is the tilted distribution \(p^\star\) from the introduction. For a Gaussian mixture and a linear reward the tilt has a closed form, which makes it possible to watch what happens as \(\beta\) decreases. A learned reward is only a proxy, and when the KL term is weak the model finds regions where the proxy is high and the data are absent.</p>
+    </div>
+    <figure class="anim gutter" data-anim="reward-tilt" id="a7">
+      <div class="anim-stage">A7 · Reward tilting</div>
+      <figcaption>
+        <p><span class="tag">A7</span>The base model is the spiral mixture and the reward is \(r(x)=x_1\), the horizontal coordinate. The tilted distribution is again a mixture: each component is reweighted by \(e^{\mu_{k,1}/\beta}\) and shifted by \(\sigma^2/\beta\) along the reward direction. With a strong KL term, mass moves towards high reward and stays on the data. A weaker term collapses the samples onto a few modes. With almost no KL term the samples leave the data and receive a higher proxy reward than any real sample, while a toy true reward that counts only samples near a data mode falls to zero.</p>
+        <a class="paper-link" href="survey.pdf#page=44"><b>Paper §4.6</b> Reward hacking and regularization, p. 44</a>
+      </figcaption>
+    </figure>
+
+    <div class="col gutter">
+      <h3>Policy gradients through the sampler</h3>
+      <p>Policy-gradient methods need the likelihood of each sampling step, which a deterministic ODE does not provide. Flow-GRPO replaces the ODE by an SDE with the same marginals, so each Euler–Maruyama step is a Gaussian transition with a known density. For each prompt it draws a group of samples and uses the reward of each sample relative to the group as its advantage, \(A_i=(r_i-\bar r)/\operatorname{std}(r)\), which removes the need for a learned value function.</p>
+    </div>
+    <figure class="anim gutter" data-anim="flow-grpo" id="a8">
+      <div class="anim-stage">A8 · Flow-GRPO</div>
+      <figcaption>
+        <p><span class="tag">A8</span>The policy is a spiral mixture whose 110 component logits are trainable, sampled with the exact reverse SDE in 20 Euler–Maruyama steps. For this policy the gradient of each step's log-likelihood with respect to the logits is available in closed form. Each update uses a group of 16 rollouts. After 80 updates with a KL penalty (\(\beta=0.3\)) the policy concentrates under the reward and keeps several modes. Without the KL term the reward reaches 0.97 and the policy collapses to about one mode. The KL between the two SDEs is computed exactly as \(\sum h\,\lVert b-b_{\mathrm{ref}}\rVert^2/2g^2\) over the steps.</p>
+        <a class="paper-link" href="survey.pdf#page=38"><b>Paper §4.2</b> Policy gradients on the denoising chain, p. 38</a>
+      </figcaption>
+    </figure>
+  </section>
+
+  <hr class="rule">
+
+  <!-- Stage 4 -->
+  <section class="stage" id="compress">
+    <div class="stage-head gutter"><span class="stage-num">Stage 04 · Compression</span><h2>From forty steps to one</h2></div>
+    <div class="col gutter">
+      <p>Integrating a learned ODE takes tens of network evaluations per sample. Distillation trains a new network, the student, that reaches the distribution of the teacher in one or a few steps. The methods differ in what the student learns: the endpoint of the teacher's trajectory, a jump between any two times, a straighter field, or a distribution that only has to match the teacher's as a whole.</p>
+      <h3>Flow maps</h3>
+      <p>A flow map \(X_{s,t}\) sends the state at time \(s\) to the state at time \(t\) along the teacher's ODE. Consistency models learn the special case \(X_{s,1}\), which maps every point to the endpoint of its trajectory. MeanFlow learns the average velocity over an interval, from which the jump follows. A single Euler step instead follows the instantaneous velocity at \(t=0\), which points to the mean of the data.</p>
+    </div>
+    <figure class="anim gutter" data-anim="flow-map-zoo" id="a9">
+      <div class="anim-stage">A9 · The flow-map zoo</div>
+      <figcaption>
+        <p><span class="tag">A9</span>Several few-step targets on one exact teacher trajectory. One Euler step lands on the data mean, and 8 steps reach a sharp sample on the wrong arm, because this trajectory turns outward only late. A consistency model maps every point of the trajectory to its endpoint. A flow map jumps between any two times, and two short jumps compose into a long one, \(X_{t,r}\circ X_{s,t}=X_{s,r}\). MeanFlow learns the slope of the chord, \(\bar u=(x_t-x_s)/(t-s)\). The teacher is the probability-flow ODE of the 110-component mixture, and every map is drawn as its ideal target, not as a trained student.</p>
+        <a class="paper-link" href="survey.pdf#page=53"><b>Paper §5.4</b> Flow maps, p. 53</a>
+      </figcaption>
+    </figure>
+
+    <div class="col gutter">
+      <h3>Reflow</h3>
+      <p>Flow matching with independent noise–data pairs learns curved paths. Reflow samples noise, runs the trained ODE to get its endpoint, and trains a new field on these coupled pairs. The new pairs do not cross, so the refitted field has nearly straight paths and few Euler steps suffice.</p>
+    </div>
+    <figure class="anim gutter" data-anim="reflow" id="a10">
+      <div class="anim-stage">A10 · Reflow</div>
+      <figcaption>
+        <p><span class="tag">A10</span>Independent pairs give straight training lines that cross, and the regressed velocity averages them. The resulting 1-rectified flow is exact here, but at \(t=0\) its velocity points every sample to the data mean, so one Euler step collapses all samples to one point. After pairing each noise sample with its own ODE endpoint, the field is refitted by Nadaraya–Watson kernel regression with bandwidth 0.07 on 8,000 pairs, and one Euler step of the refitted field lands on the data.</p>
+        <a class="paper-link" href="survey.pdf#page=47"><b>Paper §5.1</b> Trajectory distillation, p. 47</a>
+      </figcaption>
+    </figure>
+
+    <div class="col gutter">
+      <h3>Distribution matching</h3>
+      <p>Distribution matching distillation (DMD) does not follow trajectories at all. It moves each generator sample along the difference between two scores at a random noise level: the score of the noised data, given by the teacher, and the score of the noised generator samples, given by a second network trained on the generator's own outputs. This difference estimates the gradient of the reverse KL divergence. Without the second score, the update is score distillation sampling, which pulls every sample to the nearest mode.</p>
+    </div>
+    <figure class="anim gutter" data-anim="dmd" id="a11">
+      <div class="anim-stage">A11 · Distribution matching</div>
+      <figcaption>
+        <p><span class="tag">A11</span>Following the real score alone sends every sample to the nearest mode, and only 42 of the 110 modes are reached. Moving the samples by the score difference at random noise levels, with the fake score refitted after every step, spreads them over the whole spiral. The real score is exact. The fake score is a Gaussian kernel density with bandwidth 0.06 over 500 free particles, which stand in for the generator.</p>
+        <a class="paper-link" href="survey.pdf#page=50"><b>Paper §5.2</b> Distribution matching, p. 50</a>
+      </figcaption>
+    </figure>
+
+    <div class="col gutter">
+      <h3>Causal video and exposure bias</h3>
+      <p>Real-time video models generate one frame or chunk at a time, conditioned on the frames before. When such a model is trained only on real context frames (teacher forcing), its loss says nothing about how it behaves on its own slightly wrong frames. Small errors then compound over a long rollout. Self Forcing trains on the model's own rollouts, so the loss sees the contexts the model will meet at inference.</p>
+    </div>
+    <figure class="anim gutter" data-anim="self-forcing" id="a12">
+      <div class="anim-stage">A12 · Self forcing</div>
+      <figcaption>
+        <p><span class="tag">A12</span>Each frame of a toy video is a ball on a ring. Two hand-written per-frame models make the same small error on every real context frame, so their teacher-forced losses are identical. The second model also pulls drifted frames back towards the nearest real frame with strength \(\kappa=0.25\), a term that vanishes on real contexts. Conditioned on their own outputs, the error of the first model grows steadily over 400 rollouts, while the error of the second levels off.</p>
+        <a class="paper-link" href="survey.pdf#page=56"><b>Paper §5.5</b> Causal and real-time video, p. 56</a>
+      </figcaption>
+    </figure>
+  </section>
+
+  <hr class="rule">
+
+  <!-- Stage 5 -->
+  <section class="stage" id="search">
+    <div class="stage-head gutter"><span class="stage-num">Stage 05 · Search</span><h2>Spending compute at inference time</h2></div>
+    <div class="col gutter">
+      <p>A trained model can also be improved per sample, by spending more compute against a verifier. Best-of-\(N\) draws \(N\) independent samples and keeps the highest-scoring one. Its expected gain grows only like \(\sqrt{2\log N}\) times the standard deviation of the reward, so a reward region that the base model rarely visits stays out of reach. Sequential Monte Carlo steers a population of particles during sampling by reweighting and resampling them. Noise search treats the deterministic sampler as a black box from initial noise to sample and optimizes the noise.</p>
+    </div>
+    <figure class="anim gutter" data-anim="best-of-n-vs-smc" id="a13">
+      <div class="anim-stage">A13 · Best-of-N, SMC and noise search</div>
+      <figcaption>
+        <p><span class="tag">A13</span>Three methods at equal compute. The base model is the exact SDE of a Gaussian mixture, and the reward is a narrow bump outside the outer arm that fewer than 1 in 400 base samples reach with \(r>0.5\). Best-of-\(N\) with 64 trajectories returns \(r=0.25\) in this run. SMC weights 64 particles by the change in reward of the look-ahead estimate \(\hat x_1=\mathbb E[x_1\mid x_t]\) and resamples when the effective sample size falls below \(N/2\), and all of its final samples land on the bump. Trust-region noise search (Schweiger, Cremers and Ram, 2026) observes only the reward of each finished sample, proposes noises inside boxes centred on the best ones found so far, and reaches \(r=0.89\) with 64 candidates.</p>
+        <a class="paper-link" href="survey.pdf#page=61"><b>Paper §6.2–6.3</b> Search over noise and SMC, pp. 61–63</a>
+      </figcaption>
+    </figure>
+
+    <div class="col gutter">
+      <h3>Inverse problems</h3>
+      <p>An inverse problem asks for samples from the posterior \(p(x\mid y)\) given a measurement \(y\), with a pretrained model as the prior. This is the tilt with \(\beta=1\) and \(r(x)=\log p(y\mid x)\). Practical methods such as diffusion posterior sampling (DPS) approximate the guidance term by evaluating the likelihood at the denoised estimate. For a Gaussian mixture prior and a linear Gaussian measurement the posterior is again a mixture, so the approximation can be compared with the exact answer.</p>
+    </div>
+    <figure class="anim gutter" data-anim="posterior-sampling" id="a14">
+      <div class="anim-stage">A14 · Posterior sampling</div>
+      <figcaption>
+        <p><span class="tag">A14</span>The prior is the spiral mixture and only the horizontal coordinate is observed, \(y=x_1+n\) with \(\sigma_y=0.06\). The exact posterior puts 9% of its mass on the middle arm. DPS, run with the exact prior denoiser, satisfies the measurement but places 42% of its samples on that arm. Sweeping its step size trades measurement consistency against stability, and the total variation distance to the exact posterior never falls below about 0.35.</p>
+        <a class="paper-link" href="survey.pdf#page=67"><b>Paper §6.5</b> Inverse problems, p. 67</a>
+      </figcaption>
+    </figure>
+  </section>
+
+  <hr class="rule">
+
+  <!-- Applications -->
+  <section class="stage" id="applications">
+    <div class="stage-head gutter"><span class="stage-num">Applications</span><h2>World models and protein backbones</h2></div>
+    <div class="col gutter">
+      <p>Most applications combine several stages. Two of them raise questions that the toy problems above do not cover. An interactive world model generates the next frame from the current frame and an action, and it has to stay consistent over hundreds of its own outputs. A protein backbone is a chain of rigid residues, so its state space is not \(\mathbb R^d\) but a product of rotations and translations.</p>
+    </div>
+    <figure class="anim gutter" data-anim="world-model" id="a15">
+      <div class="anim-stage">A15 · An action-conditioned world model</div>
+      <figcaption>
+        <p><span class="tag">A15</span>A \(22\times15\) grid game in which each key press moves the agent one cell, walls block it and coins vanish when collected. A hand-written next-frame model, conditioned on the frame and the key, moves most of the agent's intensity one cell and a little of it too far, too short or sideways. A second variant first sharpens its context, which leaves real frames unchanged, so both have the same one-step loss. After 64 actions on its own frames, the first model has smeared the agent, moved it away from the true position and partly erased coins it never reached, while the self-forced variant keeps the game state.</p>
+        <a class="paper-link" href="survey.pdf#page=74"><b>Paper §7.3</b> World models and interactive simulation, p. 74</a>
+      </figcaption>
+    </figure>
+    <figure class="anim gutter" data-anim="protein-frames" id="a16">
+      <div class="anim-stage">A16 · Protein frames on SE(3)</div>
+      <figcaption>
+        <p><span class="tag">A16</span>Each of 51 residues is a rigid frame \((R_i,x_i)\) with its N, C\(\alpha\) and C atoms at fixed ideal coordinates. Noise draws translations from a centred Gaussian with a scale of 10 Å and rotations uniformly from SO(3). The flow-matching path moves translations linearly and rotations along SO(3) geodesics towards an idealized three-helix bundle. Bond lengths inside each residue are exact throughout, so only the arrangement of the frames has to be generated. The target is not a chemically accurate backbone.</p>
+        <a class="paper-link" href="survey.pdf#page=79"><b>Paper §7.6</b> Science, p. 79</a>
+      </figcaption>
+    </figure>
+  </section>
+
+  <hr class="rule">
+
+  <!-- Open problems -->
+  <section class="stage" id="open">
+    <div class="stage-head gutter"><span class="stage-num">Outlook</span><h2>Open problems</h2></div>
+    <div class="col gutter">
+      <p>The last section of the paper collects questions that cut across the stages. Each is stated in full there, with the small calculation that makes the trade-off precise.</p>
+      <ol class="problems">
+        <li>
+          <h3>Autoregression and diffusion as one family</h3>
+          <p>Block diffusion factorizes a sequence autoregressively over blocks and runs discrete diffusion inside each block. A block of one token is an autoregressive model, and a single block is a masked diffusion model. Under a fixed amount of unique data, masked diffusion keeps improving with repeated epochs and eventually overtakes autoregression. Which properties belong to the factorization and which to the training setup is still unclear.</p>
+          <a class="paper-link" href="survey.pdf#page=83"><b>§8.1</b> p. 83</a>
+        </li>
+        <li>
+          <h3>Evaluation that tracks human judgement</h3>
+          <p>FID can disagree with human raters, and prompt-level benchmarks saturate as models improve. The same preference models serve as rewards, as verifiers and as metrics, so a model trained against a reward and evaluated with it is graded by its own objective. Evaluation needs held-out judges in the same sense in which learning needs held-out data.</p>
+          <a class="paper-link" href="survey.pdf#page=84"><b>§8.2</b> p. 84</a>
+        </li>
+        <li>
+          <h3>Reward over-optimization</h3>
+          <p>Write \(p_\lambda\propto p\,e^{\lambda r}\) with \(\lambda=1/\beta\). For any function \(f\), \(\tfrac{d}{d\lambda}\mathbb E_{p_\lambda}[f]=\operatorname{Cov}_{p_\lambda}(f,r)\). With \(f=r\) this is a variance, so the proxy reward rises monotonically as the regularization weakens. With \(f\) the true quality, the covariance can turn negative once the tilt concentrates where the proxy's error is largest. The KL term limits how far the model moves, not in which direction.</p>
+          <a class="paper-link" href="survey.pdf#page=84"><b>§8.3</b> p. 84</a>
+        </li>
+        <li>
+          <h3>Data provenance and memorization</h3>
+          <p>The minimizer of the denoising loss on a finite training set reproduces the training images, so generalization comes from inductive biases and optimization rather than from the objective. Watermarks answer the reverse question with a hypothesis test. Their interaction with noise search, distillation and open-weight fine-tuning is rarely tested.</p>
+          <a class="paper-link" href="survey.pdf#page=85"><b>§8.4</b> p. 85</a>
+        </li>
+        <li>
+          <h3>Compute across the lifecycle</h3>
+          <p>For a model that produces \(M\) samples, the total cost is \(C_{\mathrm{pre}}+C_{\mathrm{post}}+D+M\,N\,K\,f\), with distillation cost \(D\), \(N\) candidates per output, \(K\) steps and cost \(f\) per step. Distilling from \(K\) to \(k\) steps pays for itself when \(MN(K-k)f>D\). A joint scaling law for all five quantities, measured on a metric that people agree with, does not exist yet.</p>
+          <a class="paper-link" href="survey.pdf#page=86"><b>§8.5</b> p. 86</a>
+        </li>
+        <li>
+          <h3>Beyond iterative sampling</h3>
+          <p>Transition models learn the map over any finite interval and can be sampled with any number of steps. Drifting models move the iteration into training, so that inference takes one network evaluation by design. Much of the lifecycle assumes an iterative sampler with intermediate states, including policy gradients through the SDE, sequential Monte Carlo and classifier-free guidance, and it is open how these methods carry over.</p>
+          <a class="paper-link" href="survey.pdf#page=87"><b>§8.6</b> p. 87</a>
+        </li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<footer class="gutter">
+  <p>This is a draft of the companion page. The full text, derivations and references are in the <a href="survey.pdf">draft PDF</a>.</p>
+</footer>
+
+<script type="module">
+  import { mountAll } from './blog/embed.js';
+
+  const root = document.documentElement;
+  try {
+    const saved = localStorage.getItem('survey-theme');
+    if (saved === 'light' || saved === 'dark') root.dataset.theme = saved;
+  } catch {}
+  document.getElementById('theme').addEventListener('click', () => {
+    const current = root.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const next = current === 'dark' ? 'light' : 'dark';
+    root.dataset.theme = next;
+    try { localStorage.setItem('survey-theme', next); } catch {}
+  });
+
+  // Highlight the stage in the top bar that is currently being read.
+  const links = new Map([...document.querySelectorAll('.bar nav a')].map((a) => [a.getAttribute('href').slice(1), a]));
+  const spy = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) {
+      links.forEach((a) => a.classList.remove('here'));
+      const a = links.get(e.target.id);
+      if (a) {
+        a.classList.add('here');
+        const nav = a.closest('nav');
+        nav.scrollTo({ left: a.offsetLeft - nav.clientWidth / 2 + a.offsetWidth / 2, behavior: 'smooth' });
+      }
+    }
+  }, { rootMargin: '-45% 0px -50% 0px' });
+  document.querySelectorAll('section.stage, header.mast').forEach((s) => spy.observe(s));
+
+  mountAll();
+</script>
+</body>
+</html>
