@@ -283,7 +283,7 @@
       <div class="anim-stage">A4 · Parallel unmasking</div>
       <figcaption>
         <p><span class="tag">A4</span>A toy language of 64 eight-token sentences with three coupled token pairs, so every conditional is exact and serves as the model. Revealing four tokens per step samples coupled tokens independently and produces sentences such as “owl barks”. Keeping only predictions with probability above \(\tau=0.35\) stays coherent in about three steps, at the cost of concentrating on the most probable sentences. Revealing the most confident positions first does not remove the failure.</p>
-        <a class="paper-link" href="survey.pdf#page=23"><b>Paper §2.9</b> Discrete and language diffusion, p. 23</a>
+        <a class="paper-link" href="survey.pdf#page=24"><b>Paper §2.9</b> Discrete and language diffusion, p. 23</a>
       </figcaption>
     </figure>
 
@@ -312,7 +312,7 @@
       <div class="anim-stage">A6 · LoRA in weight space</div>
       <figcaption>
         <p><span class="tag">A6</span>A flow-matching MLP with a \(64\times64\) hidden weight matrix \(W_2\) is pretrained on six Gaussians on a ring and fine-tuned on data in which one mode has moved to the origin. Updating all 4,096 entries of \(W_2\) moves that mode and keeps the other five. A rank-1 update with 128 trainable numbers gives the same samples. The unconstrained update is not itself low rank, since its top singular direction holds only 29% of \(\lVert\Delta W_2\rVert^2\). The networks are trained rather than exact, and all samples use the same noise.</p>
-        <a class="paper-link" href="survey.pdf#page=32"><b>Paper §3.1</b> Parameter-efficient fine-tuning, p. 32</a>
+        <a class="paper-link" href="survey.pdf#page=33"><b>Paper §3.1</b> Parameter-efficient fine-tuning, p. 32</a>
       </figcaption>
     </figure>
   </section>
@@ -329,7 +329,7 @@
       <div class="anim-stage">A7 · Reward tilting</div>
       <figcaption>
         <p><span class="tag">A7</span>The base model is the spiral mixture and the reward is \(r(x)=x_1\), the horizontal coordinate. The tilted distribution is again a mixture: each component is reweighted by \(e^{\mu_{k,1}/\beta}\) and shifted by \(\sigma^2/\beta\) along the reward direction. With a strong KL term, mass moves towards high reward and stays on the data. A weaker term collapses the samples onto a few modes. With almost no KL term the samples leave the data and receive a higher proxy reward than any real sample, while a toy true reward that counts only samples near a data mode falls to zero.</p>
-        <a class="paper-link" href="survey.pdf#page=45"><b>Paper §4.6</b> Reward hacking and regularization, p. 45</a>
+        <a class="paper-link" href="survey.pdf#page=46"><b>Paper §4.6</b> Reward hacking and regularization, p. 45</a>
       </figcaption>
     </figure>
 
@@ -341,7 +341,7 @@
       <div class="anim-stage">A8 · Flow-GRPO</div>
       <figcaption>
         <p><span class="tag">A8</span>The policy is a spiral mixture whose 110 component logits are trainable, sampled with the exact reverse SDE in 20 Euler–Maruyama steps. For this policy the gradient of each step's log-likelihood with respect to the logits is available in closed form. Each update uses a group of 16 rollouts. After 80 updates with a KL penalty (\(\beta=0.3\)) the policy concentrates under the reward and keeps several modes. Without the KL term the reward reaches 0.97 and the policy collapses to about one mode. The KL between the two SDEs is computed exactly as \(\sum h\,\lVert b-b_{\mathrm{ref}}\rVert^2/2g^2\) over the steps.</p>
-        <a class="paper-link" href="survey.pdf#page=38"><b>Paper §4.2</b> Policy gradients on the denoising chain, p. 38</a>
+        <a class="paper-link" href="survey.pdf#page=39"><b>Paper §4.2</b> Policy gradients on the denoising chain, p. 38</a>
       </figcaption>
     </figure>
   </section>
@@ -360,7 +360,7 @@
       <div class="anim-stage">A9 · The flow-map zoo</div>
       <figcaption>
         <p><span class="tag">A9</span>Several few-step targets on one exact teacher trajectory. One Euler step lands on the data mean, and 8 steps reach a sharp sample on the wrong arm, because this trajectory turns outward only late. A consistency model maps every point of the trajectory to its endpoint. A flow map jumps between any two times, and two short jumps compose into a long one, \(X_{t,r}\circ X_{s,t}=X_{s,r}\). MeanFlow learns the slope of the chord, \(\bar u=(x_t-x_s)/(t-s)\). The teacher is the probability-flow ODE of the 110-component mixture, and every map is drawn as its ideal target, not as a trained student.</p>
-        <a class="paper-link" href="survey.pdf#page=53"><b>Paper §5.4</b> Flow maps, p. 53</a>
+        <a class="paper-link" href="survey.pdf#page=54"><b>Paper §5.4</b> Flow maps, p. 53</a>
       </figcaption>
     </figure>
 
@@ -372,7 +372,7 @@
       <div class="anim-stage">A10 · Reflow</div>
       <figcaption>
         <p><span class="tag">A10</span>Independent pairs give straight training lines that cross, and the regressed velocity averages them. The resulting 1-rectified flow is exact here, but at \(t=0\) its velocity points every sample to the data mean, so one Euler step collapses all samples to one point. After pairing each noise sample with its own ODE endpoint, the field is refitted by Nadaraya–Watson kernel regression with bandwidth 0.07 on 8,000 pairs, and one Euler step of the refitted field lands on the data.</p>
-        <a class="paper-link" href="survey.pdf#page=47"><b>Paper §5.1</b> Trajectory distillation, p. 47</a>
+        <a class="paper-link" href="survey.pdf#page=49"><b>Paper §5.1</b> Trajectory distillation, p. 47</a>
       </figcaption>
     </figure>
 
@@ -384,7 +384,7 @@
       <div class="anim-stage">A11 · Distribution matching</div>
       <figcaption>
         <p><span class="tag">A11</span>Following the real score alone sends every sample to the nearest mode, and only 42 of the 110 modes are reached. Moving the samples by the score difference at random noise levels, with the fake score refitted after every step, spreads them over the whole spiral. The real score is exact. The fake score is a Gaussian kernel density with bandwidth 0.06 over 500 free particles, which stand in for the generator.</p>
-        <a class="paper-link" href="survey.pdf#page=50"><b>Paper §5.2</b> Distribution matching, p. 50</a>
+        <a class="paper-link" href="survey.pdf#page=51"><b>Paper §5.2</b> Distribution matching, p. 50</a>
       </figcaption>
     </figure>
 
@@ -396,7 +396,7 @@
       <div class="anim-stage">A12 · Self forcing</div>
       <figcaption>
         <p><span class="tag">A12</span>Each frame of a toy video is a ball on a ring. Two hand-written per-frame models make the same small error on every real context frame, so their teacher-forced losses are identical. The second model also pulls drifted frames back towards the nearest real frame with strength \(\kappa=0.25\), a term that vanishes on real contexts. Conditioned on their own outputs, the error of the first model grows steadily over 400 rollouts, while the error of the second levels off.</p>
-        <a class="paper-link" href="survey.pdf#page=56"><b>Paper §5.5</b> Causal and real-time video, p. 56</a>
+        <a class="paper-link" href="survey.pdf#page=57"><b>Paper §5.5</b> Causal and real-time video, p. 56</a>
       </figcaption>
     </figure>
   </section>
@@ -413,7 +413,7 @@
       <div class="anim-stage">A13 · Best-of-N, SMC and noise search</div>
       <figcaption>
         <p><span class="tag">A13</span>Three methods at equal compute. The base model is the exact SDE of a Gaussian mixture, and the reward is a narrow bump outside the outer arm that fewer than 1 in 400 base samples reach with \(r>0.5\). Best-of-\(N\) with 64 trajectories returns \(r=0.25\) in this run. SMC weights 64 particles by the change in reward of the look-ahead estimate \(\hat x_1=\mathbb E[x_1\mid x_t]\) and resamples when the effective sample size falls below \(N/2\), and all of its final samples land on the bump. Trust-region noise search (Schweiger, Cremers and Ram, 2026) observes only the reward of each finished sample, proposes noises inside boxes centred on the best ones found so far, and reaches \(r=0.89\) with 64 candidates.</p>
-        <a class="paper-link" href="survey.pdf#page=61"><b>Paper §6.2–6.3</b> Search over noise and SMC, pp. 61–63</a>
+        <a class="paper-link" href="survey.pdf#page=62"><b>Paper §6.2–6.3</b> Search over noise and SMC, pp. 61–63</a>
       </figcaption>
     </figure>
 
@@ -425,7 +425,7 @@
       <div class="anim-stage">A14 · Posterior sampling</div>
       <figcaption>
         <p><span class="tag">A14</span>The prior is the spiral mixture and only the horizontal coordinate is observed, \(y=x_1+n\) with \(\sigma_y=0.06\). The exact posterior puts 9% of its mass on the middle arm. DPS, run with the exact prior denoiser, satisfies the measurement but places 42% of its samples on that arm. Sweeping its step size trades measurement consistency against stability, and the total variation distance to the exact posterior never falls below about 0.35.</p>
-        <a class="paper-link" href="survey.pdf#page=67"><b>Paper §6.5</b> Inverse problems, p. 67</a>
+        <a class="paper-link" href="survey.pdf#page=68"><b>Paper §6.5</b> Inverse problems, p. 67</a>
       </figcaption>
     </figure>
   </section>
@@ -442,14 +442,14 @@
       <div class="anim-stage">A15 · An action-conditioned world model</div>
       <figcaption>
         <p><span class="tag">A15</span>A \(22\times15\) grid game in which each key press moves the agent one cell, walls block it and coins vanish when collected. A hand-written next-frame model, conditioned on the frame and the key, moves most of the agent's intensity one cell and a little of it too far, too short or sideways. A second variant first sharpens its context, which leaves real frames unchanged, so both have the same one-step loss. After 64 actions on its own frames, the first model has smeared the agent, moved it away from the true position and partly erased coins it never reached, while the self-forced variant keeps the game state.</p>
-        <a class="paper-link" href="survey.pdf#page=74"><b>Paper §7.3</b> World models and interactive simulation, p. 74</a>
+        <a class="paper-link" href="survey.pdf#page=75"><b>Paper §7.3</b> World models and interactive simulation, p. 74</a>
       </figcaption>
     </figure>
     <figure class="anim gutter" data-anim="protein-frames" id="a16">
       <div class="anim-stage">A16 · Protein frames on SE(3)</div>
       <figcaption>
         <p><span class="tag">A16</span>Each of 51 residues is a rigid frame \((R_i,x_i)\) with its N, C\(\alpha\) and C atoms at fixed ideal coordinates. Noise draws translations from a centred Gaussian with a scale of 10 Å and rotations uniformly from SO(3). The flow-matching path moves translations linearly and rotations along SO(3) geodesics towards an idealized three-helix bundle. Bond lengths inside each residue are exact throughout, so only the arrangement of the frames has to be generated. The target is not a chemically accurate backbone.</p>
-        <a class="paper-link" href="survey.pdf#page=79"><b>Paper §7.6</b> Science, p. 79</a>
+        <a class="paper-link" href="survey.pdf#page=80"><b>Paper §7.6</b> Science, p. 79</a>
       </figcaption>
     </figure>
   </section>
@@ -465,32 +465,32 @@
         <li>
           <h3>Autoregression and diffusion as one family</h3>
           <p>Block diffusion factorizes a sequence autoregressively over blocks and runs discrete diffusion inside each block. A block of one token is an autoregressive model, and a single block is a masked diffusion model. Under a fixed amount of unique data, masked diffusion keeps improving with repeated epochs and eventually overtakes autoregression. Which properties belong to the factorization and which to the training setup is still unclear.</p>
-          <a class="paper-link" href="survey.pdf#page=83"><b>§8.1</b> p. 83</a>
+          <a class="paper-link" href="survey.pdf#page=84"><b>§8.1</b> p. 83</a>
         </li>
         <li>
           <h3>Evaluation that tracks human judgement</h3>
           <p>FID can disagree with human raters, and prompt-level benchmarks saturate as models improve. The same preference models serve as rewards, as verifiers and as metrics, so a model trained against a reward and evaluated with it is graded by its own objective. Evaluation needs held-out judges in the same sense in which learning needs held-out data.</p>
-          <a class="paper-link" href="survey.pdf#page=84"><b>§8.2</b> p. 84</a>
+          <a class="paper-link" href="survey.pdf#page=85"><b>§8.2</b> p. 84</a>
         </li>
         <li>
           <h3>Reward over-optimization</h3>
           <p>Write \(p_\lambda\propto p\,e^{\lambda r}\) with \(\lambda=1/\beta\). For any function \(f\), \(\tfrac{d}{d\lambda}\mathbb E_{p_\lambda}[f]=\operatorname{Cov}_{p_\lambda}(f,r)\). With \(f=r\) this is a variance, so the proxy reward rises monotonically as the regularization weakens. With \(f\) the true quality, the covariance can turn negative once the tilt concentrates where the proxy's error is largest. The KL term limits how far the model moves, not in which direction.</p>
-          <a class="paper-link" href="survey.pdf#page=85"><b>§8.3</b> p. 85</a>
+          <a class="paper-link" href="survey.pdf#page=86"><b>§8.3</b> p. 85</a>
         </li>
         <li>
           <h3>Data provenance and memorization</h3>
           <p>The minimizer of the denoising loss on a finite training set reproduces the training images, so generalization comes from inductive biases and optimization rather than from the objective. Watermarks answer the reverse question with a hypothesis test. Their interaction with noise search, distillation and open-weight fine-tuning is rarely tested.</p>
-          <a class="paper-link" href="survey.pdf#page=85"><b>§8.4</b> p. 85</a>
+          <a class="paper-link" href="survey.pdf#page=87"><b>§8.4</b> p. 85</a>
         </li>
         <li>
           <h3>Compute across the lifecycle</h3>
           <p>For a model that produces \(M\) samples, the total cost is \(C_{\mathrm{pre}}+C_{\mathrm{post}}+D+M\,N\,K\,f\), with distillation cost \(D\), \(N\) candidates per output, \(K\) steps and cost \(f\) per step. Distilling from \(K\) to \(k\) steps pays for itself when \(MN(K-k)f>D\). A joint scaling law for all five quantities, measured on a metric that people agree with, does not exist yet.</p>
-          <a class="paper-link" href="survey.pdf#page=86"><b>§8.5</b> p. 86</a>
+          <a class="paper-link" href="survey.pdf#page=88"><b>§8.5</b> p. 86</a>
         </li>
         <li>
           <h3>Beyond iterative sampling</h3>
           <p>Transition models learn the map over any finite interval and can be sampled with any number of steps. Drifting models move the iteration into training, so that inference takes one network evaluation by design. Much of the lifecycle assumes an iterative sampler with intermediate states, including policy gradients through the SDE, sequential Monte Carlo and classifier-free guidance, and it is open how these methods carry over.</p>
-          <a class="paper-link" href="survey.pdf#page=87"><b>§8.6</b> p. 87</a>
+          <a class="paper-link" href="survey.pdf#page=88"><b>§8.6</b> p. 87</a>
         </li>
       </ol>
     </div>

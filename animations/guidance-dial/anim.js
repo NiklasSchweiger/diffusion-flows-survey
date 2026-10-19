@@ -174,7 +174,8 @@ function at(st, mode, w) {
 
 function labels(ctx, th, t, env, dim, badA) {
   const a = (env.clean ? 1 : seg(t, 0.8, 2)) * dim;
-  const [ax, ay] = px(0, R + 0.42), [bx, by] = px(0, -R - 0.5);
+  // In paper stills the still title occupies the top, so the class A label moves inside the ring.
+  const [ax, ay] = px(0, env.clean ? R - 0.42 : R + 0.42), [bx, by] = px(0, -R - 0.5);
   text(ctx, 'class A (prompt)', ax, ay, { size: 21, weight: 600, color: AMBER(th), alpha: a, align: 'center' });
   text(ctx, 'class B', bx, by, { size: 21, weight: 600, color: CYAN(th), alpha: a, align: 'center' });
   if (badA > 0.4 && !env.clean) {
@@ -256,7 +257,7 @@ function drawTradeoff(ctx, th, st, t, alpha) {
 
   const grow = ease.inOut(seg(t, ...T.tradeDraw));
   const series = [
-    { pts: st.cfg, color: OFF(th), name: 'classifier-free guidance', lx: -18, ly: 7, align: 'right' },
+    { pts: st.cfg, color: OFF(th), name: 'classifier-free guidance', at: [0.62, 0.56], align: 'left' },
     { pts: st.auto, color: AMBER(th), name: 'autoguidance', lx: -16, ly: -6, align: 'right' },
   ];
   for (const s of series) {
@@ -276,7 +277,9 @@ function drawTradeoff(ctx, th, st, t, alpha) {
     ctx.restore();
     const la = alpha * seg(grow, 0.9, 1);
     const last = s.pts[s.pts.length - 1];
-    text(ctx, s.name, X(last.cov) + s.lx, Y(last.prec) + s.ly, { size: 21, weight: 700, color: s.color, align: s.align, alpha: la });
+    // The CFG name sits below its curve, since its end point is at the left edge of the plot.
+    const [nx, ny] = s.at ? [X(s.at[0]), Y(s.at[1])] : [X(last.cov) + s.lx, Y(last.prec) + s.ly];
+    text(ctx, s.name, nx, ny, { size: 21, weight: 700, color: s.color, align: s.align, alpha: la });
     // Weight labels at w = 3 and 6 on each curve; w = 1 is shared.
     const isCfg = s.pts === st.cfg;
     for (const i of isCfg ? [0, 4, 10] : [4]) {

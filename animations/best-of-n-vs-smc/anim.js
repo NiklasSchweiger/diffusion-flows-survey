@@ -412,7 +412,9 @@ function drawTRS(ctx, th, st, t, alpha) {
   ctx.strokeRect(IX, IY, IW, IH);
   ctx.restore();
   text(ctx, 'noise space  x₀', IX, IY - 14, { size: 18, weight: 600, color: th.fg, alpha: inA });
-  text(ctx, 'shaded: r(F(x₀)), never seen by the search', IX, IY + IH + 24, { size: 14, color: th.muted, alpha: inA * seg(t, T.trsWarm[1] - 1, T.trsWarm[1]) });
+  const noteA = inA * seg(t, T.trsWarm[1] - 1, T.trsWarm[1]);
+  text(ctx, 'shaded: r(F(x₀)),', IX, IY + IH + 24, { size: 14, color: th.muted, alpha: noteA });
+  text(ctx, 'never seen by the search', IX, IY + IH + 44, { size: 14, color: th.muted, alpha: noteA });
   // Size changes, written next to the box that changed.
   if (bA > 0) for (let j = 0; j < TRS.k; j++) {
     const b = trsBox(run, t, j);

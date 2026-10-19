@@ -23,7 +23,7 @@ const T = {
 
 const STILLS = [
   { t: 10.0, name: 'frames', label: 'Residues as rigid frames' },
-  { t: 18.5, name: 'noise', label: 'Noise on SE(3)ᴺ' },
+  { t: 18.5, name: 'noise', label: 'Noise on SE(3) for every residue' },
   { t: 29.0, name: 'midway', label: 'Halfway along the path' },
   { t: 53.2, name: 'fold', label: 'Generated backbone' },
 ];
@@ -51,7 +51,7 @@ export default {
     const frames = st.frames(tau);
     const yaw = 0.16 * t + 0.4, pitch = 0.32;
     const zoom = t < T.noise[0] ? ease.inOut(window_(t, T.zoom[0], T.zoom[1], 1.2)) : 0;
-    drawBackbone(ctx, th, frames, yaw, pitch, zoom, st, tau);
+    drawBackbone(ctx, th, frames, yaw, pitch, zoom, st, tau, env.clean);
     if (t >= T.fold[0] - 0.5) drawChart(ctx, th, st, window_(t, T.fold[0], T.fold[1] + 1, 0.6));
     if (!env.clean) drawPanel(ctx, t, env, st, tau, frames);
     else {
@@ -173,13 +173,14 @@ function project(p, yaw, pitch, scale, cx, cy) {
   return [cx + x1 * scale, cy - y2 * scale, z2];
 }
 
-function drawBackbone(ctx, th, frames, yaw, pitch, zoom, st, tau) {
+function drawBackbone(ctx, th, frames, yaw, pitch, zoom, st, tau, clean = false) {
   const N = frames.length;
   // During the zoom we magnify around residue FOCUS and show its local axes.
   const FOCUS = 7;
-  const scale = PXA * (1 + 0.9 * zoom);
+  // Paper stills have no text panel, so the structure is drawn larger.
+  const scale = PXA * (1 + 0.9 * zoom) * (clean ? 1.35 : 1);
   const f0 = frames[FOCUS].x;
-  const cx = VX, cy = VY;
+  const cx = clean ? VX + 30 : VX, cy = VY;
   const P = (p) => project(sub(p, scl(f0, zoom)), yaw, pitch, scale, cx, cy);
   const atoms = frames.map((f) => ({ n: P(add(f.x, qrot(f.q, N_LOC))), ca: P(f.x), c: P(add(f.x, qrot(f.q, C_LOC))) }));
   const zs = atoms.map((a) => a.ca[2]), zmin = Math.min(...zs), zmax = Math.max(...zs);
@@ -231,8 +232,8 @@ function drawChart(ctx, th, st, a) {
   if (a <= 0) return;
   const B = { x: 1230, y: 620, w: 300, h: 170 };
   ctx.save();
-  ctx.globalAlpha = a * 0.93; ctx.fillStyle = th.bg; ctx.fillRect(B.x - 56, B.y - 64, B.w + 90, B.h + 112);
-  ctx.globalAlpha = a; ctx.strokeStyle = th.faint; ctx.strokeRect(B.x - 56, B.y - 64, B.w + 90, B.h + 112);
+  ctx.globalAlpha = a * 0.93; ctx.fillStyle = th.bg; ctx.fillRect(B.x - 56, B.y - 92, B.w + 90, B.h + 140);
+  ctx.globalAlpha = a; ctx.strokeStyle = th.faint; ctx.strokeRect(B.x - 56, B.y - 92, B.w + 90, B.h + 140);
   ctx.strokeStyle = th.muted; ctx.lineWidth = 1.2;
   ctx.beginPath(); ctx.moveTo(B.x, B.y); ctx.lineTo(B.x, B.y + B.h); ctx.lineTo(B.x + B.w, B.y + B.h); ctx.stroke();
   ctx.restore();
@@ -241,7 +242,7 @@ function drawChart(ctx, th, st, a) {
   text(ctx, '0', X(0), B.y + B.h + 20, { size: 13, color: th.muted, align: 'center', alpha: a });
   text(ctx, '1', X(1), B.y + B.h + 20, { size: 13, color: th.muted, align: 'center', alpha: a });
   text(ctx, 'interpolation time t', B.x + B.w / 2, B.y + B.h + 38, { size: 14, color: th.muted, align: 'center', alpha: a });
-  const series = [['rmsd', th.fg, 'Cα RMSD to target (Å)', -44], ['cc', th.ramp[3], 'neighbour Cα–Cα distance (Å)', -26], ['bond', th.accent, 'N–Cα bond length (Å)', -8]];
+  const series = [['rmsd', th.fg, 'Cα RMSD to target (Å)', -66], ['cc', th.ramp[3], 'neighbour Cα–Cα distance (Å)', -44], ['bond', th.accent, 'N–Cα bond length (Å)', -22]];
   for (const [key, col, name, dy] of series) {
     ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = col; ctx.lineWidth = 2.4;
     ctx.beginPath();

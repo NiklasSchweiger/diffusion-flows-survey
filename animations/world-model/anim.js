@@ -62,7 +62,7 @@ export default {
     { t: T.chart[0], label: 'III · Error' },
   ],
   stills: STILLS,
-  crop: { x: 620, y: 0, w: 970, h: 900 },
+  crop: { x: 620, y: 0, w: 970, h: 845 },
 
   setup() { return buildData(); },
 
@@ -74,16 +74,16 @@ export default {
     if (mode === 'one') {
       const k = Math.min(Math.floor(n), SETUP_N + 5);
       drawGrid(ctx, th, PANELS.gt, st.gt[k + 1], pa, 'Game engine, frame ' + (k + 1), th.fg);
-      drawGrid(ctx, th, PANELS.tf, st.oneTF[k], pa, 'Teacher-forced model, from real frame ' + k, th.fg);
-      drawGrid(ctx, th, PANELS.sf, st.oneSF[k], pa, 'Self-forced model, from real frame ' + k, th.accent);
+      drawGrid(ctx, th, PANELS.tf, st.oneTF[k], pa, 'Teacher-forced, real frame ' + k, th.fg);
+      drawGrid(ctx, th, PANELS.sf, st.oneSF[k], pa, 'Self-forced, real frame ' + k, th.accent);
     } else {
       const k = Math.min(Math.floor(n), NA), u = mode === 'setup' ? 0 : n - k;
       drawGrid(ctx, th, PANELS.gt, mixFrame(st.gt, k, u), pa, `Game engine, frame ${k}`, th.fg);
       const ma = mode === 'setup' ? seg(t, 4, 5.5) * pa : pa;
       if (ma > 0) {
         const m = mode === 'setup' ? 0 : k;
-        drawGrid(ctx, th, PANELS.tf, mode === 'setup' ? st.gt[0] : mixFrame(st.tf, m, u), ma, mode === 'setup' ? 'Teacher-forced model' : `Teacher-forced model, own frame ${m}`, th.fg);
-        drawGrid(ctx, th, PANELS.sf, mode === 'setup' ? st.gt[0] : mixFrame(st.sf, m, u), ma, mode === 'setup' ? 'Self-forced model' : `Self-forced model, own frame ${m}`, th.accent);
+        drawGrid(ctx, th, PANELS.tf, mode === 'setup' ? st.gt[0] : mixFrame(st.tf, m, u), ma, mode === 'setup' ? 'Teacher-forced model' : `Teacher-forced, own frame ${m}`, th.fg);
+        drawGrid(ctx, th, PANELS.sf, mode === 'setup' ? st.gt[0] : mixFrame(st.sf, m, u), ma, mode === 'setup' ? 'Self-forced model' : `Self-forced, own frame ${m}`, th.accent);
       }
     }
     if (t >= T.chart[0]) drawChart(ctx, th, st, t, seg(t, T.chart[0], T.chart[0] + 0.8));
@@ -281,20 +281,20 @@ function drawKeys(ctx, th, st, n, a) {
     ctx.restore();
     text(ctx, ARROW[key], x + S / 2, y + S / 2 + 12, { size: 32, weight: 700, color: on ? th.bg : th.fg, alpha: a, align: 'center' });
   }
-  const hist = st.acts.slice(Math.max(0, k - 13), k + 1).map((v) => ARROW[v]).join(' ');
+  const hist = st.acts.slice(Math.max(0, k - 10), k + 1).map((v) => ARROW[v]).join(' ');
   text(ctx, 'history', KEYS.x, KEYS.y + 214, { size: 15, weight: 600, color: th.muted, alpha: a, spacing: 1.5 });
   text(ctx, hist, KEYS.x, KEYS.y + 248, { size: 22, color: th.fg, alpha: a, font: 'mono' });
 }
 
 function drawChart(ctx, th, st, t, a) {
-  const L = 740, R = 1380, grow = ease.inOut(seg(t, ...T.chartDraw));
+  const L = 740, R = 1300, grow = ease.inOut(seg(t, ...T.chartDraw));
   ctx.save();
   ctx.globalAlpha = a * 0.9;
   ctx.fillStyle = th.bg;
   ctx.fillRect(640, 40, W - 640, H - 60);
   ctx.restore();
   const panels = [
-    { top: 110, bot: 380, key: '', lab: 'agent position error (cells)', max: Math.ceil(Math.max(...st.curve.tf)) },
+    { top: 130, bot: 380, key: '', lab: 'agent position error (cells)', max: Math.ceil(Math.max(...st.curve.tf)) },
     { top: 500, bot: 770, key: 'C', lab: 'coins that changed but should not have', max: Math.ceil(Math.max(...st.curve.tfC)) },
   ];
   const X = (n) => L + (n / NA) * (R - L);

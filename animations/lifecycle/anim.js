@@ -37,7 +37,7 @@ export default {
   width: W, height: H,
   chapters: STAGES.map((s, i) => ({ t: s.span[0], label: `${i + 1} · ${s.name}` })),
   stills: STILLS,
-  crop: { x: 620, y: 0, w: 960, h: 900 },
+  crop: { x: 620, y: 0, w: 960, h: 720 },
 
   setup() {
     // Pretrained ring; fine-tuned ring plus a centre mode; aligned = fine-tuned tilted by exp(λ y).
@@ -89,7 +89,8 @@ export default {
       else dot(ctx, th, X, Y, th.accent, lerp(0.9, 0.25, sa), 2.3);
     }
 
-    drawStrip(ctx, th, t);
+    // The stage strip repeats the still titles, so paper stills leave it out.
+    if (!env.clean) drawStrip(ctx, th, t);
     if (!env.clean) drawPanel(ctx, t, env, st);
     else {
       const c = STILLS.reduce((a, b) => (Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a));

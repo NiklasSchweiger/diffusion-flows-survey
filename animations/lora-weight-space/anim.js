@@ -194,7 +194,7 @@ function drawWeights(ctx, th, st, t) {
   if (fa > 0 && t < T.lora[0] + 0.3) {
     heat(ctx, th, st.dFull, MX, MY, CELL, st.scaleD, fa);
     text(ctx, 'ΔW₂, full update', MX, MY - 18, { size: 17, weight: 600, color: th.fg, alpha: fa });
-    text(ctx, '4,096 trainable numbers', MX, MY + size + 26, { size: 16, color: th.muted, alpha: fa });
+    text(ctx, '4,096 trainable numbers', MX, MY + size + 26, { size: 14, color: th.muted, alpha: fa });
   }
   const la = t >= T.lora[0] ? seg(t, ...T.loraBA) : 0;
   if (la > 0) {
@@ -206,7 +206,7 @@ function drawWeights(ctx, th, st, t) {
     text(ctx, 'B', MX - 24, MY + size + 24, { size: 17, weight: 700, color: th.fg, alpha: la, font: 'serif' });
     text(ctx, 'A', MX + size + 10, MY - 18, { size: 17, weight: 700, color: th.fg, alpha: la, font: 'serif' });
     text(ctx, 'ΔW₂ = B A, rank 1', MX, MY - 44, { size: 17, weight: 600, color: th.fg, alpha: la });
-    text(ctx, '64 + 64 = 128 trainable numbers', MX, MY + size + 26, { size: 16, color: th.muted, alpha: la });
+    text(ctx, '64 + 64 = 128 trainable numbers', MX, MY + size + 26, { size: 14, color: th.muted, alpha: la });
   }
 }
 
@@ -228,13 +228,14 @@ function drawSpectrum(ctx, th, st, t) {
     ctx.fillRect(B.x + k * bw + bw / 2, B.y + B.h - hr, bw / 2 - 2, hr);
   }
   ctx.restore();
-  text(ctx, 'share of ‖ΔW₂‖² per direction', B.x, B.y - 36, { size: 17, weight: 600, color: th.fg, alpha: a });
+  text(ctx, 'share of ‖ΔW₂‖²', B.x, B.y - 36, { size: 17, weight: 600, color: th.fg, alpha: a });
   text(ctx, 'full', B.x, B.y - 14, { size: 15, weight: 600, color: th.muted, alpha: a });
   text(ctx, 'LoRA rank 1', B.x + 46, B.y - 14, { size: 15, weight: 600, color: th.ramp[3], alpha: a });
   const e8 = Math.round(st.en.full.slice(0, 8).reduce((x, y) => x + y, 0) * 100);
-  text(ctx, `full: top direction ${Math.round(st.en.full[0] * 100)}%, top eight ${e8}%`, B.x, B.y + B.h + 46, { size: 14, color: th.fg, alpha: a * p });
-  text(ctx, 'rank 1: top direction 100%', B.x, B.y + B.h + 66, { size: 14, color: th.ramp[3], alpha: a * p });
-  text(ctx, `largest ${K} of 64`, B.x + B.w, B.y + B.h + 22, { size: 14, color: th.muted, alpha: a, align: 'right' });
+  text(ctx, `full: top direction ${Math.round(st.en.full[0] * 100)}%`, B.x, B.y + B.h + 46, { size: 14, color: th.fg, alpha: a * p });
+  text(ctx, `full: top eight ${e8}%`, B.x, B.y + B.h + 66, { size: 14, color: th.fg, alpha: a * p });
+  text(ctx, 'rank 1: top direction 100%', B.x, B.y + B.h + 86, { size: 14, color: th.ramp[3], alpha: a * p });
+  text(ctx, `largest ${K} of 64 directions`, B.x + B.w, B.y + B.h + 22, { size: 14, color: th.muted, alpha: a, align: 'right' });
 }
 
 // ---------- Text panel ----------

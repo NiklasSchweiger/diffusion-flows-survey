@@ -364,7 +364,10 @@ function drawChart(ctx, th, t, alpha, st) {
   text(ctx, '4 per step', X(k4.steps) + 14, Y(k4.valid) + 6, { size: 15, color: th.muted, alpha: la });
   text(ctx, '2 per step', X(k2.steps) + 14, Y(k2.valid) + 6, { size: 15, color: th.muted, alpha: la });
   const t35 = st.curveTau.find((p) => p.tau === TAU);
-  text(ctx, `confidence threshold, τ = ${TAU}`, X(t35.steps) + 4, Y(t35.valid) - 22, { size: 19, weight: 700, color: rampColor(th, 1, 1), alpha: la });
+  // Two lines below the plateau, so the label clears both the axis title and the red curve.
+  const tauStyle = { size: 19, weight: 700, color: rampColor(th, 1, 1), alpha: la };
+  text(ctx, 'confidence threshold', X(t35.steps) + 12, Y(t35.valid) + 34, tauStyle);
+  text(ctx, `τ = ${TAU}`, X(t35.steps) + 12, Y(t35.valid) + 60, tauStyle);
   text(ctx, 'one token per step', X(8) + 12, Y(0.86), { size: 15, color: th.fg, align: 'right', alpha: la });
   text(ctx, '(either order, 8 steps)', X(8) + 12, Y(0.86) + 21, { size: 15, color: th.muted, align: 'right', alpha: la });
   ctx.save();

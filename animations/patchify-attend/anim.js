@@ -26,7 +26,7 @@ const QUERIES = [{ span: T.q1, w: 2 }, { span: T.q2, w: 5 }, { span: T.q3, w: 8 
 
 const STILLS = [
   { t: 6.5, name: 'image', label: 'Pixels' },
-  { t: 17.5, name: 'latent', label: 'Latent, 8× smaller per side' },
+  { t: 17.5, name: 'latent', label: 'Latent, 8× smaller per side', crop: { x: 600, y: 0, w: 990, h: 500 } },
   { t: 30.5, name: 'tokens', label: '2×2 patches become tokens' },
   { t: 39.5, name: 'attention', label: 'Joint attention, query "sun"' },
 ];
@@ -43,7 +43,7 @@ export default {
     { t: T.attn[0], label: 'III · Joint attention' },
   ],
   stills: STILLS,
-  crop: { x: 600, y: 0, w: 990, h: 900 },
+  crop: { x: 600, y: 0, w: 990, h: 720 },
 
   setup() { return buildData(); },
 

@@ -39,7 +39,12 @@ export function rampColor(theme, u, alpha = 1) {
   return `rgba(${c[0]},${c[1]},${c[2]},${alpha})`;
 }
 
+// Paper stills are printed at about a quarter of the canvas width, so small labels are enlarged there.
+let printScale = 1;
+export function setPrintText(on) { printScale = on ? 1.3 : 1; }
+
 export function text(ctx, str, x, y, { size = 20, weight = 400, color = '#fff', align = 'left', font = 'sans', alpha = 1, spacing = 0 } = {}) {
+  if (size < 30) size *= printScale;
   ctx.save();
   ctx.globalAlpha *= alpha;
   ctx.font = `${weight} ${size}px ${fonts[font]}`;

@@ -43,14 +43,14 @@ export default {
     { t: T.chart[0], label: 'III · Error growth' },
   ],
   stills: STILLS,
-  crop: { x: 620, y: 0, w: 970, h: 900 },
+  crop: { x: 620, y: 0, w: 970, h: 800 },
 
   setup() { return buildData(); },
 
   draw(ctx, t, env, st) {
     const th = env.theme;
     const rowA = 1 - seg(t, T.chart[0], T.chart[0] + 0.8);
-    if (t < T.tf[0]) drawDataRow(ctx, th, st, t, window_(t, T.data[0] - 1, T.data[1], 0.5));
+    if (t < T.tf[0]) drawDataRow(ctx, th, st, t, window_(t, T.data[0] - 1, T.data[1], 0.5), env.clean);
     else if (t < T.roll[0]) drawOneStep(ctx, th, st, t, window_(t, T.tf[0], T.tf[1], 0.5));
     else if (rowA > 0) drawRollouts(ctx, th, st, t, Math.min(seg(t, T.roll[0], T.roll[0] + 0.5), rowA));
     if (t >= T.chart[0]) drawChart(ctx, th, st, t, seg(t, T.chart[0], T.chart[0] + 0.8));
@@ -171,7 +171,7 @@ function drawTile(ctx, th, x, y, size, z, a, { ghost = null, label = null, ring 
 }
 
 // A row: one large current frame and a 2 × 6 strip of every 8th frame so far.
-const ROWS = [{ y: 112, name: 'tf' }, { y: 492, name: 'sf' }];
+const ROWS = [{ y: 130, name: 'tf' }, { y: 492, name: 'sf' }];
 const BIG = { x: 660, size: 270 }, THUMB = { x: 960, size: 96, gap: 8 };
 
 function drawRow(ctx, th, y, zs, n, a, title, color) {
@@ -191,9 +191,10 @@ function drawRow(ctx, th, y, zs, n, a, title, color) {
   }
 }
 
-function drawDataRow(ctx, th, st, t, a) {
+function drawDataRow(ctx, th, st, t, a, clean) {
   const n = N * seg(t, ...T.dataPlay);
-  drawRow(ctx, th, ROWS[0].y, st.data, n, a, 'Real video', th.fg);
+  // In paper stills the panel title already says this.
+  drawRow(ctx, th, ROWS[0].y, st.data, n, a, clean ? '' : 'Real video', th.fg);
   const b = a * seg(t, 3, 4);
   if (b > 0) {
     const y = ROWS[1].y;
@@ -234,7 +235,7 @@ function drawRollouts(ctx, th, st, t, a) {
 }
 
 function drawChart(ctx, th, st, t, a) {
-  const L = 760, R = 1380, top = 150, bot = 700, grow = ease.inOut(seg(t, ...T.chartDraw));
+  const L = 760, R = 1300, top = 150, bot = 700, grow = ease.inOut(seg(t, ...T.chartDraw));
   const ymax = 1.4, X = (n) => L + (n / N) * (R - L), Y = (v) => bot - (v / ymax) * (bot - top);
   ctx.save();
   ctx.globalAlpha = a;

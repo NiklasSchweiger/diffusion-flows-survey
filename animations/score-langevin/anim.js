@@ -30,7 +30,7 @@ const T = {
 };
 
 const STILLS = [
-  { t: 9.5, name: 'field', label: 'Score field, σ = 0.1' },
+  { t: 9.5, name: 'field', label: 'Score field' },
   { t: 24.5, name: 'single', label: 'Langevin at one noise level' },
   { t: 31.5, name: 'anneal-mid', label: 'Annealed, mid-way' },
   { t: 55.4, name: 'compare', label: 'Mass along the spiral' },
@@ -197,7 +197,7 @@ function drawHist(ctx, th, hist, x0, y0, a, label, w = 300, h = 150) {
 
 function drawCompare(ctx, th, st, a) {
   drawHist(ctx, th, st.single.hist, 1230, 120, a, 'one level, σ = 0.05');
-  drawHist(ctx, th, st.anneal.hist, 1230, 640, a, 'annealed, σ = 3 → 0.05');
+  drawHist(ctx, th, st.anneal.hist, 1230, 640, a, 'annealed, 10 levels');
 }
 
 // ---------- Text panel ----------

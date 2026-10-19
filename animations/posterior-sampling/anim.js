@@ -212,7 +212,7 @@ function drawBand(ctx, th, a) {
   ctx.strokeStyle = th.ramp[3]; ctx.lineWidth = 1.4; ctx.setLineDash([6, 6]);
   ctx.beginPath(); ctx.moveTo(x, 40); ctx.lineTo(x, H - 40); ctx.stroke();
   ctx.restore();
-  text(ctx, `observed x₁ = ${Y0}`, x + 12, 70, { size: 19, weight: 600, color: th.ramp[3], alpha: a, font: 'serif' });
+  text(ctx, `observed x₁ = ${Y0}`, x + 12, 112, { size: 19, weight: 600, color: th.ramp[3], alpha: a, font: 'serif' });
 }
 
 function drawPosteriorGlow(ctx, th, st, a) {
@@ -254,7 +254,7 @@ const HX = 1430, HW = 150;
 function drawHist(ctx, th, st, samples, a, dpsA) {
   if (a <= 0) return;
   const max = Math.max(...st.ref) * 1.15, bh = ((YHI - YLO) / NB) * S;
-  text(ctx, 'posterior over x₂', HX, 70, { size: 17, color: th.muted, alpha: a });
+  text(ctx, 'posterior over x₂', HX + HW, 112, { size: 17, color: th.muted, alpha: a, align: 'right' });
   ctx.save();
   ctx.globalAlpha = a;
   ctx.strokeStyle = th.muted; ctx.lineWidth = 1;

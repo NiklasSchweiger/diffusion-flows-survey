@@ -304,14 +304,14 @@ function drawDelta(ctx, th, st, t, a) {
 }
 
 function drawChart(ctx, th, st, t, a) {
-  const L = CX - 290, R = CX + 400, grow = ease.inOut(seg(t, ...T.chartDraw));
+  const L = CX - 290, R = CX + 350, grow = ease.inOut(seg(t, ...T.chartDraw));
   ctx.save();
   ctx.globalAlpha = a * 0.92;
   ctx.fillStyle = th.bg;
   ctx.fillRect(L - 100, 50, R - L + 160, H - 70);
   ctx.restore();
   const panels = [
-    { top: 110, bot: 400, key: 'er', lab: 'expected reward', ticks: [0, 0.5, 1], Y: (v, tp, bt) => bt - v * (bt - tp) },
+    { top: 130, bot: 400, key: 'er', lab: 'expected reward', ticks: [0, 0.5, 1], Y: (v, tp, bt) => bt - v * (bt - tp) },
     { top: 500, bot: 790, key: 'modes', lab: 'effective number of modes', ticks: [1, 10, 100], Y: (v, tp, bt) => bt - (Math.log10(v) / Math.log10(K)) * (bt - tp) },
   ];
   const X = (i) => L + (i / ITERS) * (R - L);
