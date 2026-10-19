@@ -329,7 +329,7 @@
       <div class="anim-stage">A7 · Reward tilting</div>
       <figcaption>
         <p><span class="tag">A7</span>The base model is the spiral mixture and the reward is \(r(x)=x_1\), the horizontal coordinate. The tilted distribution is again a mixture: each component is reweighted by \(e^{\mu_{k,1}/\beta}\) and shifted by \(\sigma^2/\beta\) along the reward direction. With a strong KL term, mass moves towards high reward and stays on the data. A weaker term collapses the samples onto a few modes. With almost no KL term the samples leave the data and receive a higher proxy reward than any real sample, while a toy true reward that counts only samples near a data mode falls to zero.</p>
-        <a class="paper-link" href="survey.pdf#page=44"><b>Paper §4.6</b> Reward hacking and regularization, p. 44</a>
+        <a class="paper-link" href="survey.pdf#page=45"><b>Paper §4.6</b> Reward hacking and regularization, p. 45</a>
       </figcaption>
     </figure>
 
@@ -475,7 +475,7 @@
         <li>
           <h3>Reward over-optimization</h3>
           <p>Write \(p_\lambda\propto p\,e^{\lambda r}\) with \(\lambda=1/\beta\). For any function \(f\), \(\tfrac{d}{d\lambda}\mathbb E_{p_\lambda}[f]=\operatorname{Cov}_{p_\lambda}(f,r)\). With \(f=r\) this is a variance, so the proxy reward rises monotonically as the regularization weakens. With \(f\) the true quality, the covariance can turn negative once the tilt concentrates where the proxy's error is largest. The KL term limits how far the model moves, not in which direction.</p>
-          <a class="paper-link" href="survey.pdf#page=84"><b>§8.3</b> p. 84</a>
+          <a class="paper-link" href="survey.pdf#page=85"><b>§8.3</b> p. 85</a>
         </li>
         <li>
           <h3>Data provenance and memorization</h3>
