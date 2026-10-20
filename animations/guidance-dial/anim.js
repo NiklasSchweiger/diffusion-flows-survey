@@ -30,10 +30,10 @@ const T = {
 };
 
 const STILLS = [
-  { t: 5.0, name: 'conditional', label: 'No guidance (w = 1)' },
-  { t: 19.6, name: 'cfg', label: 'Classifier-free guidance, w = 6' },
-  { t: 30.6, name: 'autoguidance', label: 'Autoguidance, w = 3' },
-  { t: 47.4, name: 'tradeoff', label: 'Precision vs coverage' },
+  { t: 5.0, name: 'conditional', crop: { x: 633, y: 25, w: 857, h: 818 }, label: 'No guidance (w = 1)' },
+  { t: 19.6, name: 'cfg', crop: { x: 633, y: 25, w: 857, h: 818 }, label: 'Classifier-free guidance, w = 6' },
+  { t: 30.6, name: 'autoguidance', crop: { x: 633, y: 27, w: 857, h: 816 }, label: 'Autoguidance, w = 3' },
+  { t: 47.4, name: 'tradeoff', crop: { x: 633, y: 27, w: 857, h: 816 }, label: 'Precision vs coverage' },
 ];
 
 const AMBER = (th, a = 1) => rampColor(th, 1, a);
@@ -51,7 +51,7 @@ export default {
     { t: T.auto[0], label: 'II · Autoguidance' },
     { t: T.trade[0], label: 'III · Trade-off' },
   ],
-  stills: STILLS,
+  stills: STILLS,  // Paper crops trimmed to the drawn content, one height per figure row.
   crop: { x: CX - 430, y: CY - 430, w: 860, h: 860 },
 
   setup(env) {

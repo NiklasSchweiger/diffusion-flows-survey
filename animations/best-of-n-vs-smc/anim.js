@@ -38,9 +38,9 @@ const T = {
 };
 
 const STILLS = [
-  { t: 14.6, name: 'best-of-n', label: 'Best-of-N' },
-  { t: 23.4, name: 'smc-resampling', label: 'SMC: look ahead and resample' },
-  { t: 30.9, name: 'smc', label: 'SMC' },
+  { t: 14.6, name: 'best-of-n', crop: { x: 645, y: 15, w: 947, h: 782 }, label: 'Best-of-N' },
+  { t: 23.4, name: 'smc-resampling', crop: { x: 645, y: 15, w: 947, h: 782 }, label: 'SMC: look ahead and resample' },
+  { t: 30.9, name: 'smc', crop: { x: 645, y: 15, w: 947, h: 782 }, label: 'SMC' },
   { t: 40.9, name: 'trs-search', label: 'Trust-region noise search' },
   { t: 47.9, name: 'trs', label: 'Trust-region search: result' },
   { t: 60.2, name: 'scaling', label: 'Reward vs compute' },
@@ -61,7 +61,7 @@ export default {
     { t: T.trs[0], label: 'III · Trust regions' },
     { t: T.curve[0], label: 'IV · Scaling' },
   ],
-  stills: STILLS,
+  stills: STILLS,  // Paper crops trimmed to the drawn content, one height per figure row.
   crop: { x: 640, y: 0, w: 952, h: 900 },
 
   setup(env) {

@@ -44,8 +44,8 @@ const T = {
 const SETUP_N = 12;
 
 const STILLS = [
-  { t: 8.6, name: 'engine', label: 'The game engine' },
-  { t: 18.3, name: 'one-step', label: 'One-step predictions from real frames' },
+  { t: 8.6, name: 'engine', crop: { x: 636, y: 12, w: 954, h: 812 }, label: 'The game engine' },
+  { t: 18.3, name: 'one-step', crop: { x: 636, y: 12, w: 954, h: 812 }, label: 'One-step predictions from real frames' },
   { t: 40.4, name: 'rollout', label: `After ${NA} actions` },
   { t: 53.4, name: 'curves', label: 'Error along the rollout' },
 ];
@@ -61,7 +61,7 @@ export default {
     { t: T.roll[0], label: 'II · Rollout' },
     { t: T.chart[0], label: 'III · Error' },
   ],
-  stills: STILLS,
+  stills: STILLS,  // Paper crops trimmed to the drawn content, one height per figure row.
   crop: { x: 620, y: 0, w: 970, h: 845 },
 
   setup() { return buildData(); },

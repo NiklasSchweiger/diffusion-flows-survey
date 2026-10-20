@@ -23,9 +23,9 @@ const STAGES = [
   { key: 'se', span: [38, 50], name: 'Search', sec: '§6' },
 ];
 const STILLS = [
-  { t: 9.5, name: 'pretrain', label: '1 · Pretrain' },
-  { t: 18.5, name: 'finetune', label: '2 · Fine-tune' },
-  { t: 27.5, name: 'align', label: '3 · Align' },
+  { t: 9.5, name: 'pretrain', crop: { x: 626, y: 0, w: 954, h: 690 }, label: '1 · Pretrain' },
+  { t: 18.5, name: 'finetune', crop: { x: 626, y: 0, w: 954, h: 690 }, label: '2 · Fine-tune' },
+  { t: 27.5, name: 'align', crop: { x: 626, y: 0, w: 954, h: 690 }, label: '3 · Align' },
   { t: 37.5, name: 'distill', label: '4 · Distill' },
   { t: 49.4, name: 'search', label: '5 · Search' },
 ];
@@ -36,7 +36,7 @@ export default {
   duration: 50,
   width: W, height: H,
   chapters: STAGES.map((s, i) => ({ t: s.span[0], label: `${i + 1} · ${s.name}` })),
-  stills: STILLS,
+  stills: STILLS,  // Paper crops trimmed to the drawn content, one height per figure row.
   crop: { x: 620, y: 0, w: 960, h: 720 },
 
   setup() {

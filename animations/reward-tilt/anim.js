@@ -37,10 +37,10 @@ const T = {
 };
 
 const STILLS = [
-  { t: 18.6, name: 'tilted', label: 'Strong KL (β = 0.3)' },
-  { t: 29.0, name: 'collapsed', label: 'Weak KL (β = 0.06)' },
-  { t: 41.4, name: 'hacked', label: 'Almost no KL (β = 0.004)' },
-  { t: 53.4, name: 'overoptimization', label: 'Proxy vs true reward' },
+  { t: 18.6, name: 'tilted', crop: { x: 637, y: 16, w: 874, h: 865 }, label: 'Strong KL (β = 0.3)' },
+  { t: 29.0, name: 'collapsed', crop: { x: 637, y: 16, w: 874, h: 865 }, label: 'Weak KL (β = 0.06)' },
+  { t: 41.4, name: 'hacked', crop: { x: 637, y: 16, w: 874, h: 865 }, label: 'Almost no KL (β = 0.004)' },
+  { t: 53.4, name: 'overoptimization', crop: { x: 637, y: 16, w: 874, h: 865 }, label: 'Proxy vs true reward' },
 ];
 
 const OFF = (th) => (th.name === 'dark' ? '#ff6b6b' : '#dc2626');
@@ -59,7 +59,7 @@ export default {
     { t: T.hack[0], label: 'III · Reward hacking' },
     { t: T.curve[0], label: 'IV · Overoptimization' },
   ],
-  stills: STILLS,
+  stills: STILLS,  // Paper crops trimmed to the drawn content, one height per figure row.
   crop: { x: 600, y: 0, w: 1000, h: 900 },
 
   setup(env) {

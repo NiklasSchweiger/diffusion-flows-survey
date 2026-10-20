@@ -31,10 +31,10 @@ const T = {
 };
 
 const STILLS = [
-  { t: 21.4, name: 'score-fields', label: 'Real and fake scores' },
-  { t: 30.4, name: 'real-score-only', label: 'Real score only' },
-  { t: 49.4, name: 'dmd', label: 'Distribution matching' },
-  { t: 62.4, name: 'mmd', label: 'Distance to the data' },
+  { t: 21.4, name: 'score-fields', crop: { x: 638, y: 6, w: 929, h: 847 }, label: 'Real and fake scores' },
+  { t: 30.4, name: 'real-score-only', crop: { x: 638, y: 6, w: 929, h: 847 }, label: 'Real score only' },
+  { t: 49.4, name: 'dmd', crop: { x: 638, y: 7, w: 929, h: 843 }, label: 'Distribution matching' },
+  { t: 62.4, name: 'mmd', crop: { x: 638, y: 7, w: 929, h: 843 }, label: 'Distance to the data' },
 ];
 
 // ---------- Dynamics ----------
@@ -76,7 +76,7 @@ export default {
     { t: T.dmd[0], label: 'III · Distribution matching' },
     { t: T.chart[0], label: 'IV · Distance to the data' },
   ],
-  stills: STILLS,
+  stills: STILLS,  // Paper crops trimmed to the drawn content, one height per figure row.
   crop: { x: 600, y: 0, w: 1000, h: 900 },
 
   setup(env) {

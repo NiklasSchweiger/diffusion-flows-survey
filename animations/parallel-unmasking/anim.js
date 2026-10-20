@@ -104,11 +104,11 @@ const T = {
 };
 
 const STILLS = [
-  { t: 7.2, name: 'language', label: 'A language with coupled tokens' },
+  { t: 7.2, name: 'language', crop: { x: 637, y: 16, w: 963, h: 811 }, label: 'A language with coupled tokens' },
   { t: 19.2, name: 'one-per-step', label: 'One token per step (8 steps)' },
-  { t: 30.7, name: 'fixed-parallel', label: 'Four tokens per step (2 steps)' },
-  { t: 43.2, name: 'threshold', label: `Confidence threshold τ = ${TAU}` },
-  { t: 54.6, name: 'tradeoff', label: 'Valid sentences vs steps' },
+  { t: 30.7, name: 'fixed-parallel', crop: { x: 637, y: 16, w: 963, h: 811 }, label: 'Four tokens per step (2 steps)' },
+  { t: 43.2, name: 'threshold', crop: { x: 637, y: 18, w: 963, h: 807 }, label: `Confidence threshold τ = ${TAU}` },
+  { t: 54.6, name: 'tradeoff', crop: { x: 637, y: 18, w: 963, h: 807 }, label: 'Valid sentences vs steps' },
 ];
 
 export default {
@@ -123,7 +123,7 @@ export default {
     { t: T.tau[0], label: 'III · Confidence threshold' },
     { t: T.chart[0], label: 'IV · Trade-off' },
   ],
-  stills: STILLS,
+  stills: STILLS,  // Paper crops trimmed to the drawn content, one height per figure row.
   crop: { x: 600, y: 0, w: 1000, h: 900 },
 
   setup() {

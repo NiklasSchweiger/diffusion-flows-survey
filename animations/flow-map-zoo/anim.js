@@ -62,9 +62,9 @@ const STILLS = [
   { t: 10.0, name: 'euler', label: 'Euler steps' },
   { t: 13.4, name: 'euler-cloud', label: 'Two Euler steps, all samples' },
   { t: 20.2, name: 'consistency', label: 'Consistency model' },
-  { t: 31.6, name: 'flow-map', label: 'Flow map' },
-  { t: 34.6, name: 'meanflow', label: 'MeanFlow: chord vs tangent' },
-  { t: 47.6, name: 'one-step', label: 'One flow-map step' },
+  { t: 31.6, name: 'flow-map', crop: { x: 623, y: 25, w: 831, h: 820 }, label: 'Flow map' },
+  { t: 34.6, name: 'meanflow', crop: { x: 623, y: 25, w: 831, h: 820 }, label: 'MeanFlow: chord vs tangent' },
+  { t: 47.6, name: 'one-step', crop: { x: 623, y: 25, w: 831, h: 820 }, label: 'One flow-map step' },
 ];
 
 export default {
@@ -81,7 +81,7 @@ export default {
     { t: T.mf[0], label: 'IV · MeanFlow' },
     { t: T.one[0], label: 'V · One step' },
   ],
-  stills: STILLS,
+  stills: STILLS,  // Paper crops trimmed to the drawn content, one height per figure row.
   crop: { x: CX - 430, y: CY - 430, w: 860, h: 860 },
 
   setup() {

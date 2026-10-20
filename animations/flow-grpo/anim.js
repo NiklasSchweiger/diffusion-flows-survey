@@ -38,11 +38,11 @@ const T = {
 };
 
 const STILLS = [
-  { t: 16.8, name: 'group', label: 'A group of 16 rollouts' },
-  { t: 26.4, name: 'update', label: 'One policy update' },
+  { t: 16.8, name: 'group', crop: { x: 600, y: 18, w: 990, h: 810 }, label: 'A group of 16 rollouts' },
+  { t: 26.4, name: 'update', crop: { x: 600, y: 18, w: 990, h: 810 }, label: 'One policy update' },
   { t: 39.8, name: 'no-kl', label: 'GRPO without KL' },
-  { t: 53.2, name: 'kl', label: `GRPO with KL (β = ${BETA})` },
-  { t: 65.4, name: 'curves', label: 'Reward and diversity' },
+  { t: 53.2, name: 'kl', crop: { x: 600, y: 16, w: 990, h: 863 }, label: `GRPO with KL (β = ${BETA})` },
+  { t: 65.4, name: 'curves', crop: { x: 600, y: 16, w: 990, h: 863 }, label: 'Reward and diversity' },
 ];
 
 const POS = (th) => (th.name === 'dark' ? '#9dff8a' : '#15803d');
@@ -61,7 +61,7 @@ export default {
     { t: T.kl[0], label: 'IV · With KL' },
     { t: T.chart[0], label: 'V · Curves' },
   ],
-  stills: STILLS,
+  stills: STILLS,  // Paper crops trimmed to the drawn content, one height per figure row.
   crop: { x: 600, y: 0, w: 990, h: 900 },
 
   setup() { return buildData(); },

@@ -22,10 +22,10 @@ const T = {
 };
 
 const STILLS = [
-  { t: 10.0, name: 'frames', label: 'Residues as rigid frames' },
-  { t: 18.5, name: 'noise', label: 'Noise on SE(3) for every residue' },
-  { t: 29.0, name: 'midway', label: 'Halfway along the path' },
-  { t: 53.2, name: 'fold', label: 'Generated backbone' },
+  { t: 10.0, name: 'frames', crop: { x: 637, y: 10, w: 919, h: 859 }, label: 'Residues as rigid frames' },
+  { t: 18.5, name: 'noise', crop: { x: 637, y: 10, w: 919, h: 859 }, label: 'Noise on SE(3) for every residue' },
+  { t: 29.0, name: 'midway', crop: { x: 637, y: 12, w: 919, h: 844 }, label: 'Halfway along the path' },
+  { t: 53.2, name: 'fold', crop: { x: 637, y: 12, w: 919, h: 844 }, label: 'Generated backbone' },
 ];
 
 export default {
@@ -39,7 +39,7 @@ export default {
     { t: T.flow[0], label: 'II · The flow' },
     { t: T.fold[0], label: 'III · Geometry' },
   ],
-  stills: STILLS,
+  stills: STILLS,  // Paper crops trimmed to the drawn content, one height per figure row.
   crop: { x: 600, y: 0, w: 990, h: 900 },
 
   setup() { return buildData(); },

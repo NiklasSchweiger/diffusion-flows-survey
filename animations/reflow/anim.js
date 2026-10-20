@@ -29,11 +29,11 @@ const T = {
 };
 
 const STILLS = [
-  { t: 17.4, name: 'independent', label: 'Independent coupling' },
-  { t: 29.6, name: 'one-step-1rf', label: 'One Euler step, 1-rectified flow' },
+  { t: 17.4, name: 'independent', crop: { x: 637, y: 18, w: 859, h: 850 }, label: 'Independent coupling' },
+  { t: 29.6, name: 'one-step-1rf', crop: { x: 637, y: 18, w: 859, h: 850 }, label: 'One Euler step, 1-rectified flow' },
   { t: 33.8, name: 'reflow-coupling', label: 'Reflow coupling' },
-  { t: 42.6, name: 'one-step-reflow', label: 'One Euler step after reflow' },
-  { t: 55.6, name: 'error-vs-nfe', label: 'Error vs number of steps' },
+  { t: 42.6, name: 'one-step-reflow', crop: { x: 637, y: 18, w: 859, h: 822 }, label: 'One Euler step after reflow' },
+  { t: 55.6, name: 'error-vs-nfe', crop: { x: 637, y: 18, w: 859, h: 822 }, label: 'Error vs number of steps' },
 ];
 
 // ---------- Reflow field by kernel regression ----------
@@ -108,7 +108,7 @@ export default {
     { t: T.re[0], label: 'III · Reflow' },
     { t: T.chart[0], label: 'IV · Error vs steps' },
   ],
-  stills: STILLS,
+  stills: STILLS,  // Paper crops trimmed to the drawn content, one height per figure row.
   crop: { x: 600, y: 0, w: 1000, h: 900 },
 
   setup(env) {

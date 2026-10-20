@@ -25,10 +25,10 @@ const T = {
 };
 
 const STILLS = [
-  { t: 8.5, name: 'pretrained', label: 'Pretrained flow' },
-  { t: 21.5, name: 'full', label: 'Full update of W₂' },
-  { t: 35.5, name: 'lora', label: 'Rank-1 LoRA update' },
-  { t: 49.4, name: 'spectrum', label: 'Rank of the two updates' },
+  { t: 8.5, name: 'pretrained', crop: { x: 638, y: 12, w: 952, h: 668 }, label: 'Pretrained flow' },
+  { t: 21.5, name: 'full', crop: { x: 638, y: 12, w: 952, h: 668 }, label: 'Full update of W₂' },
+  { t: 35.5, name: 'lora', crop: { x: 638, y: 12, w: 952, h: 792 }, label: 'Rank-1 LoRA update' },
+  { t: 49.4, name: 'spectrum', crop: { x: 638, y: 12, w: 952, h: 792 }, label: 'Rank of the two updates' },
 ];
 
 export default {
@@ -42,7 +42,7 @@ export default {
     { t: T.lora[0], label: 'II · LoRA' },
     { t: T.spec[0], label: 'III · Rank' },
   ],
-  stills: STILLS,
+  stills: STILLS,  // Paper crops trimmed to the drawn content, one height per figure row.
   crop: { x: 600, y: 0, w: 990, h: 900 },
 
   setup() { return buildData(); },
