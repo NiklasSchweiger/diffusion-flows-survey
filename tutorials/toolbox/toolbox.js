@@ -3,6 +3,7 @@
 import { RULES, GROUPS } from '../lib/rules.js';
 
 const TUTORIALS = [
+  ['data', '§2.0', 'Data and distributions'],
   ['ebm-langevin', '§2.1', 'Energies, scores and Langevin dynamics'],
   ['score-matching', '§2.2', 'Learning the score'],
   ['sde', '§2.3', 'Diffusion as an SDE'],
