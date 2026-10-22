@@ -176,6 +176,7 @@ main { max-width: 880px; margin: 0 auto; padding: 0 24px; }
 .deriv .task ul.have li { margin: 0 0 3px; }
 .deriv .task .goal { overflow-x: auto; }
 .deriv .task .goal mjx-container { margin: 2px 0 !important; text-align: left !important; }
-.deriv .task .plan { margin: 0; color: var(--muted); }
+.deriv .task .plan { margin: 6px 0 0; color: var(--muted); }
+.deriv .task .planbtn { margin-left: 0; }
 .deriv .task + .line { border-top: 0; }
 @media (max-width: 700px) { .deriv .task { grid-template-columns: minmax(0, 1fr); } }

@@ -182,7 +182,12 @@ function derivation(d, stepTex) {
   if (goal) box.querySelector('.head').insertAdjacentHTML('afterend', `<div class="task">
     ${d.have?.length ? `<div class="tl">We have</div><ul class="have">${d.have.map((h) => `<li>${glue(h)}</li>`).join('')}</ul>` : ''}
     <div class="tl">We want to show</div><div class="goal">\\[${goal}\\]</div>
-    ${d.plan ? `<div class="tl">Plan</div><p class="plan">${glue(d.plan)}</p>` : ''}</div>`);
+    ${d.plan ? `<div class="tl">Plan</div><div><button class="tipbtn planbtn" type="button" aria-expanded="false">Show plan</button><p class="plan" hidden>${glue(d.plan)}</p></div>` : ''}</div>`);
+  // The plan gives the strategy away, so it stays closed until the reader asks for it.
+  box.querySelector('.planbtn')?.addEventListener('click', (e) => {
+    const b = e.currentTarget, p = b.nextElementSibling, open = p.hidden;
+    p.hidden = !open; b.setAttribute('aria-expanded', open); b.textContent = open ? 'Hide plan' : 'Show plan';
+  });
   const rows = d.lines.map((l, i) => {
     const r = document.createElement('div');
     r.className = 'line' + (i ? ' hidden' : '');
