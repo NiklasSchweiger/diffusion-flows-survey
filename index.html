@@ -181,6 +181,35 @@
     .anim-stage { aspect-ratio: 10 / 9; }
   }
   @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+  /* Tutorials */
+  .tuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+  .tut { display: block; color: inherit; text-decoration: none; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg); transition: border-color .15s, transform .15s; }
+  .tut:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .tut .shot { aspect-ratio: 16 / 10; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .tut .shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .tut .shot .dark { display: none; }
+  :root[data-theme="dark"] .tut .shot .light { display: none; }
+  :root[data-theme="dark"] .tut .shot .dark { display: block; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .tut .shot .light { display: none; }
+    :root:not([data-theme="light"]) .tut .shot .dark { display: block; }
+  }
+  .tut .body { padding: 18px 22px 22px; }
+  .tut .meta { font: 500 12.5px/1 var(--mono); color: var(--mark); letter-spacing: .02em; }
+  .tut .meta span { color: var(--faint); margin-left: 10px; }
+  .tut h3 { font: 600 21px/1.3 var(--head); letter-spacing: -.01em; margin: 10px 0 8px; }
+  .tut p { margin: 0; font: 16px/1.6 var(--head); color: var(--muted); }
+  .toolbox { display: grid; grid-template-columns: 110px 190px 1fr auto; gap: 18px; align-items: baseline; margin-top: 30px; padding: 18px 22px; border: 1px solid var(--line); border-radius: 12px; text-decoration: none; color: var(--fg); background: var(--panel); }
+  .toolbox:hover { border-color: var(--accent); }
+  .toolbox .k { font: 600 11.5px/1 var(--head); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .toolbox .t { font: 600 19px/1.2 var(--head); }
+  .toolbox .d { font: 15px/1.5 var(--head); color: var(--muted); }
+  .toolbox .go { font: 500 14px/1 var(--head); color: var(--accent); }
+  @media (max-width: 860px) {
+    .tuts { grid-template-columns: 1fr; }
+    .toolbox { grid-template-columns: 1fr; gap: 6px; }
+  }
 </style>
 </head>
 <body>
@@ -197,6 +226,7 @@
         <li><a href="#search"><span>05</span>Search</a></li>
         <li><a href="#applications"><span>06</span>Applications</a></li>
         <li><a href="#open"><span>07</span>Open problems</a></li>
+        <li><a href="#tutorials"><span>08</span>Tutorials</a></li>
       </ol>
     </nav>
     <button class="icon-btn" id="theme" type="button" aria-label="Switch between light and dark theme">
@@ -209,13 +239,13 @@
   <p class="kicker">Web companion to the survey · Draft</p>
   <h1>Diffusion, Flows and Beyond</h1>
   <p class="sub">The lifecycle of a generative model, from pretraining to inference-time search, in seventeen animations.</p>
-  <p class="byline"><span>Niklas Schweiger</span><span>October 2026</span><a href="survey.pdf">Read the draft (PDF, 120 pages)</a></p>
+  <p class="byline"><span>Niklas Schweiger</span><span>October 2026</span><a href="survey.pdf">Read the draft (PDF, 125 pages)</a></p>
 </header>
 
 <main>
   <div class="col gutter" style="padding-top:40px">
     <p class="lede">This page accompanies a survey of diffusion and flow models. It follows a model through five stages: pretraining, adaptation, alignment, compression and search. Each stage has one or more animations, and each animation links to the section of the paper that treats it in full.</p>
-    <p>Most animations use two-dimensional Gaussian mixtures. For a mixture of Gaussians the score, the velocity field and the posterior mean are available in closed form at every noise level, so the arrows and trajectories you see are the exact fields and not the output of a trained network. Where an animation uses something else, such as a trained network, a hand-written model or a schematic, the caption says so. The animations run in your browser from the same code that renders the figures in the paper.</p>
+    <p>Most animations use two-dimensional Gaussian mixtures. For a mixture of Gaussians the score, the velocity field and the posterior mean are available in closed form at every noise level, so the arrows and trajectories you see are the exact fields and not the output of a trained network. Where an animation uses something else, such as a trained network, a hand-written model or a schematic, the caption says so. The animations run in your browser from the same code that renders the figures in the paper. The fundamentals of Chapter 2 also have <a href="#tutorials">interactive tutorials</a>, which derive each result step by step next to a plot you can change.</p>
     <div class="note">
       <p><strong>Notation.</strong> Time runs from noise to data. At \(t=0\) the state is noise and at \(t=1\) it is data, with \(x_t=\alpha_t x_1+\sigma_t x_0\), \(x_0\sim\mathcal N(0,I)\) and \(x_1\) drawn from the data. Score-based diffusion and many image codebases use the opposite direction.</p>
       <p><strong>Controls.</strong> An animation plays while it is on screen. Click the frame or the play button to pause, drag the slider to scrub, and use the chapter buttons to jump. After clicking a figure, the arrow keys step one second. On a narrow screen the text inside each frame is small, and the caption below it describes the same content.</p>
@@ -329,7 +359,7 @@
       <div class="anim-stage">A7 · Reward tilting</div>
       <figcaption>
         <p><span class="tag">A7</span>The base model is the spiral mixture and the reward is \(r(x)=x_1\), the horizontal coordinate. The tilted distribution is again a mixture: each component is reweighted by \(e^{\mu_{k,1}/\beta}\) and shifted by \(\sigma^2/\beta\) along the reward direction. With a strong KL term, mass moves towards high reward and stays on the data. A weaker term collapses the samples onto a few modes. With almost no KL term the samples leave the data and receive a higher proxy reward than any real sample, while a toy true reward that counts only samples near a data mode falls to zero.</p>
-        <a class="paper-link" href="survey.pdf#page=46"><b>Paper §4.6</b> Reward hacking and regularization, p. 45</a>
+        <a class="paper-link" href="survey.pdf#page=46"><b>Paper §4.6</b> Reward hacking and regularization, p. 44</a>
       </figcaption>
     </figure>
 
@@ -475,7 +505,7 @@
         <li>
           <h3>Reward over-optimization</h3>
           <p>Write \(p_\lambda\propto p\,e^{\lambda r}\) with \(\lambda=1/\beta\). For any function \(f\), \(\tfrac{d}{d\lambda}\mathbb E_{p_\lambda}[f]=\operatorname{Cov}_{p_\lambda}(f,r)\). With \(f=r\) this is a variance, so the proxy reward rises monotonically as the regularization weakens. With \(f\) the true quality, the covariance can turn negative once the tilt concentrates where the proxy's error is largest. The KL term limits how far the model moves, not in which direction.</p>
-          <a class="paper-link" href="survey.pdf#page=86"><b>§8.3</b> p. 85</a>
+          <a class="paper-link" href="survey.pdf#page=86"><b>§8.3</b> p. 84</a>
         </li>
         <li>
           <h3>Data provenance and memorization</h3>
@@ -493,6 +523,66 @@
           <a class="paper-link" href="survey.pdf#page=88"><b>§8.6</b> p. 87</a>
         </li>
       </ol>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- Tutorials -->
+  <section class="stage" id="tutorials">
+    <div class="stage-head gutter"><span class="stage-num">Tutorials · Chapter 2</span><h2>Deriving the fundamentals step by step</h2></div>
+    <div class="col gutter">
+      <p>Each tutorial follows one section of Chapter 2. A step states a result, shows it in a plot you can change and derives it one line at a time, with a hint for every line that names the rule it uses. As in the animations, the targets are Gaussian mixtures, so every density, score and velocity in the plots is exact.</p>
+    </div>
+    <div class="wide gutter">
+      <div class="tuts">
+        <a class="tut" href="tutorials/ebm-langevin/">
+          <div class="shot"><img class="light" src="tutorials/ebm-langevin/thumb-light.jpg" alt="" loading="lazy"><img class="dark" src="tutorials/ebm-langevin/thumb-dark.jpg" alt="" loading="lazy"></div>
+          <div class="body">
+            <div class="meta">§2.1<span>7 steps</span></div>
+            <h3>Energies, scores and Langevin dynamics</h3>
+            <p>An energy defines a density, and its score does not depend on the normalizing constant. Langevin dynamics samples with the score alone. The last steps show why one noise level is not enough and how annealing the noise recovers the right mass per mode.</p>
+          </div>
+        </a>
+        <a class="tut" href="tutorials/score-matching/">
+          <div class="shot"><img class="light" src="tutorials/score-matching/thumb-light.jpg" alt="" loading="lazy"><img class="dark" src="tutorials/score-matching/thumb-dark.jpg" alt="" loading="lazy"></div>
+          <div class="body">
+            <div class="meta">§2.2<span>7 steps</span></div>
+            <h3>Learning the score: from Hyvärinen to Tweedie</h3>
+            <p>How a model learns the score from samples when the density is unknown. The tutorial goes from explicit and implicit score matching to denoising score matching, shows that the marginal score is an average of conditional scores, and ends with Tweedie’s formula and the four prediction targets.</p>
+          </div>
+        </a>
+        <a class="tut" href="tutorials/sde/">
+          <div class="shot"><img class="light" src="tutorials/sde/thumb-light.jpg" alt="" loading="lazy"><img class="dark" src="tutorials/sde/thumb-dark.jpg" alt="" loading="lazy"></div>
+          <div class="body">
+            <div class="meta">§2.3<span>7 steps</span></div>
+            <h3>Diffusion as an SDE</h3>
+            <p>Letting the number of noise levels go to infinity turns the corruption into a stochastic differential equation. The tutorial derives the Fokker–Planck equation, the reverse-time SDE and the probability-flow ODE, and writes both samplers in the survey’s interpolation convention.</p>
+          </div>
+        </a>
+        <a class="tut" href="tutorials/flow-matching/">
+          <div class="shot"><img class="light" src="tutorials/flow-matching/thumb-light.jpg" alt="" loading="lazy"><img class="dark" src="tutorials/flow-matching/thumb-dark.jpg" alt="" loading="lazy"></div>
+          <div class="body">
+            <div class="meta">§2.4<span>7 steps</span></div>
+            <h3>Flows: the continuity equation and flow matching</h3>
+            <p>From the continuity equation to the flow-matching loss, trained live in the page. The velocity and the score turn out to be the same field, one trained velocity supports a whole family of samplers, and straighter paths need fewer steps.</p>
+          </div>
+        </a>
+        <a class="tut" href="tutorials/likelihood/">
+          <div class="shot"><img class="light" src="tutorials/likelihood/thumb-light.jpg" alt="" loading="lazy"><img class="dark" src="tutorials/likelihood/thumb-dark.jpg" alt="" loading="lazy"></div>
+          <div class="body">
+            <div class="meta">§2.5<span>7 steps</span></div>
+            <h3>The likelihood view: ELBO, VDM and loss weighting</h3>
+            <p>A diffusion model read as a deep VAE. The tutorial derives the variational bound, its continuous-time limit and why the noise schedule only changes its variance. It then writes common losses as weightings of one integrand and computes exact likelihoods with the probability-flow ODE.</p>
+          </div>
+        </a>
+      </div>
+      <a class="toolbox" href="tutorials/toolbox/">
+        <span class="k">Reference</span>
+        <span class="t">Math toolbox</span>
+        <span class="d">The rules from calculus, probability and stochastic calculus that the derivations use, each stated once, explained and linked to every line that uses it.</span>
+        <span class="go">Open →</span>
+      </a>
     </div>
   </section>
 </main>

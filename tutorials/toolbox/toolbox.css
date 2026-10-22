@@ -1,0 +1,32 @@
+/* The math toolbox page, on top of lib/tutorial.css. */
+main { padding-bottom: 120px; }
+.intro .tb-toc { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 18px 24px; margin: 26px 0 0; padding: 18px 20px; background: var(--panel); border-radius: 10px; font: 14px/1.5 var(--head); }
+.tb-toc a { display: block; color: var(--fg); text-decoration: none; padding: 2px 0; }
+.tb-toc a:hover { color: var(--accent); }
+.lab { font: 600 11.5px/1 var(--head); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: 8px; }
+
+.group { padding: 34px 0 6px; }
+.group h2 { display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+.group h2 .n { font: 500 13px/1 var(--mono); color: var(--faint); }
+.group .gintro { color: var(--muted); margin: 0 0 8px; }
+
+.rule-entry { padding: 22px 0 24px; border-bottom: 1px dashed var(--line); scroll-margin-top: 70px; }
+.rule-entry:last-child { border-bottom: 0; }
+.rule-entry h3 { font: 600 21px/1.3 var(--head); margin: 0 0 4px; }
+.rule-entry h3 a { color: var(--accent-2); text-decoration: none; }
+.rule-entry h3 .at { font: 500 13px/1 var(--mono); color: var(--faint); margin-left: 8px; }
+.rule-entry .formula { font-size: 18px; margin: 12px 0; }
+.rule-entry .short { font-weight: 600; }
+.rule-entry p { margin: 0 0 12px; }
+.rule-entry .ex { border-left: 3px solid var(--line); padding: 2px 0 2px 16px; margin: 14px 0; overflow-x: auto; }
+.rule-entry .ex .lab { margin: 6px 0 0; }
+.rule-entry:target { background: linear-gradient(90deg, var(--chip), transparent); box-shadow: -16px 0 0 var(--chip); }
+.rule-entry:target h3 { color: var(--accent); }
+
+.used { font: 14px/1.5 var(--head); margin-top: 14px; }
+.used ul { list-style: none; margin: 0; padding: 0; }
+.used li { padding: 3px 0; }
+.used a { color: var(--fg); text-decoration: none; border-bottom: 1px solid var(--line); }
+.used a:hover { border-color: var(--accent); }
+.used .sec { font: 500 12.5px/1 var(--mono); color: var(--mark); margin-right: 4px; }
+.used .ln { font: 12.5px/1 var(--mono); color: var(--faint); margin-left: 6px; }
