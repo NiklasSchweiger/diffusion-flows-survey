@@ -46,6 +46,113 @@ const fmt = (v, k = 2) => (v.toFixed(k).replace(/^-(0\.0*)$/, '$1')).replace('-'
 
 // ---------- Step 1: four objects and their vectors ----------
 const ELC = (pal) => ({ C: pal.muted, N: pal.ramp[1], O: pal.bad });
+// Drawing helpers shared by step 1 and the preview of step 8. Colours are mixed in RGB.
+const rgb = (c) => { const m = /^#([0-9a-f]{6})$/i.exec(c); return m ? [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)) : [128, 128, 128]; };
+const mix = (a, b, f) => { const A = rgb(a), B = rgb(b); return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * f).toString(16).padStart(2, '0')).join(''); };
+// Colour map of the image: background at 0, the theme ramp towards 1. One table of 101 colours per theme.
+const CMAP = {};
+function cmap(pal, v) {
+  const lut = CMAP[live.theme] ??= (() => {
+    const st = live.theme === 'dark' ? [mix(pal.bg, pal.ramp[1], 0.07), mix(pal.bg, pal.ramp[1], 0.6), pal.ramp[2], pal.ramp[3], mix(pal.ramp[3], '#ffffff', 0.5)]
+      : [mix(pal.bg, pal.ramp[0], 0.05), mix(pal.bg, pal.ramp[0], 0.45), pal.ramp[1], mix(pal.ramp[1], pal.fg, 0.6)];
+    return Array.from({ length: 101 }, (_, i) => { const u = i / 100 * (st.length - 1), k = Math.min(st.length - 2, Math.floor(u)); return mix(st[k], st[k + 1], u - k); });
+  })();
+  return lut[Math.round(100 * Math.max(0, Math.min(1, v)))];
+}
+// A 16 x 16 grid of rounded tiles with a hairline gap; val(k) is the value of pixel k in [0, 1].
+function tiles(ctx, pal, x0, y0, q, val) {
+  ctx.fillStyle = cmap(pal, 0); ctx.beginPath(); ctx.roundRect(x0 - 3, y0 - 3, 16 * q + 6, 16 * q + 6, 6); ctx.fill();
+  const gap = q > 8 ? 1 : 0, rr = q > 12 ? 2 : 0;
+  for (let k = 0; k < 256; k++) {
+    ctx.fillStyle = cmap(pal, val(k)); ctx.beginPath(); ctx.roundRect(x0 + (k % 16) * q + gap / 2, y0 + Math.floor(k / 16) * q + gap / 2, q - gap, q - gap, rr); ctx.fill();
+  }
+}
+// A shaded sphere: a highlight towards the upper left and a darker rim.
+function sphere(ctx, X, Y, r, col) {
+  const g = ctx.createRadialGradient(X - 0.35 * r, Y - 0.4 * r, 0.1 * r, X, Y, r);
+  g.addColorStop(0, mix(col, '#ffffff', 0.6)); g.addColorStop(0.5, col); g.addColorStop(1, mix(col, '#000000', 0.45));
+  ctx.beginPath(); ctx.arc(X, Y, r, 0, 7); ctx.fillStyle = g; ctx.fill();
+}
+const ATOM_R = { C: 0.36, N: 0.34, O: 0.33 };   // drawn radii in Å, about a third of the van der Waals radii
+const atomCol = (pal, el) => (el === 'C' ? mix(pal.muted, pal.fg, live.theme === 'dark' ? 0.15 : 0) : ELC(pal)[el]);
+// Ball and stick: bonds split in the colours of their two atoms, double bonds as two thinner sticks.
+function ballStick(ctx, pal, P, atoms, bonds, sc, { letters = true, ring = null } = {}) {
+  const sw = Math.max(2.5, 0.15 * sc), out = live.theme === 'dark' ? '#000000' : mix(pal.fg, pal.bg, 0.35);
+  ctx.lineCap = 'round';
+  bonds.forEach(([i, j, ord]) => {
+    const [X1, Y1] = P(atoms[i].p), [X2, Y2] = P(atoms[j].p), L = Math.hypot(X2 - X1, Y2 - Y1) || 1, nx = -(Y2 - Y1) / L, ny = (X2 - X1) / L;
+    const offs = ord === 2 ? [-0.55 * sw, 0.55 * sw] : [0], wd = ord === 2 ? 0.62 * sw : sw;
+    for (const o of offs) {
+      const ax = X1 + o * nx, ay = Y1 + o * ny, bx = X2 + o * nx, by = Y2 + o * ny, mx = (ax + bx) / 2, my = (ay + by) / 2;
+      ctx.strokeStyle = out; ctx.globalAlpha = 0.35; ctx.lineWidth = wd + 2; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); ctx.globalAlpha = 1;
+      [[ax, ay, atoms[i].el], [bx, by, atoms[j].el]].forEach(([x, y, el]) => { ctx.strokeStyle = atomCol(pal, el); ctx.lineWidth = wd; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(mx, my); ctx.stroke(); });
+    }
+  });
+  ctx.lineCap = 'butt';
+  atoms.forEach(({ p, el }, k) => {
+    const [X, Y] = P(p), r = ATOM_R[el] * sc;
+    sphere(ctx, X, Y, r, atomCol(pal, el));
+    if (letters && r > 9) label(ctx, el, X, Y + 0.36 * r, '#ffffff', Math.round(r * 0.95), 'center', 700);
+    if (ring === k) { ctx.strokeStyle = pal.mark; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(X, Y, r + 4, 0, 7); ctx.stroke(); ctx.lineWidth = 1; }
+  });
+}
+// Colour along the chain, from the N- to the C-terminus.
+const chainCol = (pal, u) => { const st = pal.ramp, x = Math.max(0, Math.min(1, u)) * (st.length - 1), k = Math.min(st.length - 2, Math.floor(x)); return mix(st[k], st[k + 1], x - k); };
+// Catmull-Rom spline through pts, m samples per segment; each sample carries its residue coordinate u.
+function spline(pts, m = 10) {
+  const out = [], n = pts.length, at = (i) => pts[Math.max(0, Math.min(n - 1, i))];
+  for (let i = 0; i < n - 1; i++) for (let j = 0; j < (i === n - 2 ? m + 1 : m); j++) {
+    const s = j / m, [p0, p1, p2, p3] = [at(i - 1), at(i), at(i + 1), at(i + 2)];
+    const f = (d) => 0.5 * (2 * p1[d] + (-p0[d] + p2[d]) * s + (2 * p0[d] - 5 * p1[d] + 4 * p2[d] - p3[d]) * s * s + (-p0[d] + 3 * p1[d] - 3 * p2[d] + p3[d]) * s * s * s);
+    out.push({ x: f(0), y: f(1), u: i + s });
+  }
+  return out;
+}
+// Cartoon of the backbone in screen coordinates: β-strands as flat arrows, the rest as a round tube.
+// The guide points are the Cα positions, smoothed inside strands so that the pleat does not show.
+function cartoon(ctx, pal, ca, strands, wS, wC, fade = 1) {
+  const inS = (k) => strands.some(([a, b]) => k >= a && k <= b);
+  let g = ca.map((p) => p.slice());
+  for (let it = 0; it < 2; it++) g = g.map((p, k) => (k > 0 && k < ca.length - 1 && inS(k) ? [0, 1].map((d) => 0.25 * g[k - 1][d] + 0.5 * g[k][d] + 0.25 * g[k + 1][d]) : p));
+  const sp = spline(g), n = ca.length;
+  const half = (u) => {
+    for (const [a, b] of strands) if (u >= a - 0.01 && u <= b) { const head = b - 0.9; return u < head ? wS : 1.8 * wS * (b - u) / 0.9; }
+    return wC;
+  };
+  ctx.lineJoin = 'round';
+  for (let i = 0; i < sp.length - 1; i++) {
+    const A = sp[i], B = sp[i + 1], L = Math.hypot(B.x - A.x, B.y - A.y) || 1, nx = -(B.y - A.y) / L, ny = (B.x - A.x) / L;
+    const ha = half(A.u), hb = half(B.u), col = mix(pal.bg, chainCol(pal, A.u / (n - 1)), fade);
+    if (ha === wC && hb === wC) { ctx.strokeStyle = col; ctx.lineWidth = 2 * wC; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke(); ctx.lineCap = 'butt'; continue; }
+    const q = [[A.x + ha * nx, A.y + ha * ny], [B.x + hb * nx, B.y + hb * ny], [B.x - hb * nx, B.y - hb * ny], [A.x - ha * nx, A.y - ha * ny]];
+    ctx.beginPath(); q.forEach(([x, y], j) => (j ? ctx.lineTo : ctx.moveTo).call(ctx, x, y)); ctx.closePath();
+    ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 0.8; ctx.stroke();
+    ctx.strokeStyle = mix(col, '#000000', 0.4); ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(...q[0]); ctx.lineTo(...q[1]); ctx.moveTo(...q[2]); ctx.lineTo(...q[3]);
+    if (Math.abs(ha - hb) > 0.3 * wS) { ctx.moveTo(...q[0]); ctx.lineTo(...q[3]); }
+    ctx.stroke();
+  }
+  return sp;
+}
+// The frame of one residue as a triangle N, Cα, C in screen coordinates.
+function frameTri(ctx, pal, [N, A, C], col, strong = false, alpha = 0.8) {
+  ctx.beginPath(); ctx.moveTo(...N); ctx.lineTo(...A); ctx.lineTo(...C); ctx.closePath();
+  ctx.fillStyle = col; ctx.globalAlpha = strong ? 0.95 : alpha; ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = mix(col, live.theme === 'dark' ? '#ffffff' : '#000000', 0.35); ctx.lineWidth = 1; ctx.lineJoin = 'round'; ctx.stroke();
+}
+// A rounded token chip; state is 'on', 'mark' or 'masked'.
+function chip(ctx, pal, X, Y, w, h, text, state, size = 14) {
+  ctx.beginPath(); ctx.roundRect(X, Y, w, h, Math.min(10, h / 3));
+  if (state === 'masked') {
+    ctx.fillStyle = pal.panel; ctx.fill(); ctx.setLineDash([4, 3]); ctx.strokeStyle = pal.faint; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+    label(ctx, text, X + w / 2, Y + h / 2 + size * 0.32, pal.faint, size * 0.8, 'center', 600);
+    return;
+  }
+  const c = state === 'mark' ? pal.mark : pal.acc;
+  ctx.fillStyle = mix(pal.bg, c, live.theme === 'dark' ? 0.16 : 0.1); ctx.fill();
+  ctx.strokeStyle = mix(pal.bg, c, state === 'mark' ? 1 : 0.5); ctx.lineWidth = state === 'mark' ? 2 : 1.2; ctx.stroke();
+  label(ctx, text, X + w / 2, Y + h / 2 + size * 0.34, state === 'mark' ? pal.mark : pal.fg, size, 'center', 600);
+}
 const OBJECTS = {
   image: { name: 'Image', d: 256, groups: 256, vec: () => IMG },
   molecule: { name: 'Molecule', d: 84, groups: 14, vec: molVector, cols: ['x', 'y', 'z', 'C', 'N', 'O'] },
@@ -53,77 +160,68 @@ const OBJECTS = {
   text: { name: 'Sentence', d: 6, groups: 6, vec: () => TEXT.ids, cols: ['id'] },
 };
 function objects(viz) {
-  const c = makeCanvas(16 / 9, { maxH: 0.66 }), ro = readout();
+  // Object and vector side by side, or stacked on narrow screens.
+  const NARROW = 560, c = makeCanvas((w) => (w < NARROW ? 0.5 : 16 / 9), { maxH: 0.66 }), ro = readout();
   let kind = 'image', hov = null;
   const vecs = Object.fromEntries(Object.entries(OBJECTS).map(([k, o]) => [k, o.vec()]));
   const btns = Object.entries(OBJECTS).map(([k, o]) => button(o.name, () => { kind = k; hov = null; btns.forEach((b) => b.classList.toggle('on', b === btns[Object.keys(OBJECTS).indexOf(kind)])); draw(); }, k === kind ? 'on' : ''));
   let hit = () => null;
   c.cv.addEventListener('pointermove', (e) => { const r = c.cv.getBoundingClientRect(); hov = hit(e.clientX - r.left, e.clientY - r.top); draw(); });
   c.cv.addEventListener('pointerleave', () => { hov = null; draw(); });
-  viz.append(c.cv, controls(...btns), ro, note('Caffeine: 3D conformer of PubChem CID 2519, heavy atoms only. Protein: residues 1 to 16 of ubiquitin, PDB entry 1UBQ, drawn in the plane of largest spread. The image is drawn by code, and the token ids are illustrative.'));
+  viz.append(c.cv, controls(...btns), ro, note('Caffeine: 3D conformer of PubChem CID 2519, heavy atoms only. Protein: residues 1 to 16 of ubiquitin, PDB entry 1UBQ, drawn in the plane of largest spread, with the two β-strands of its SHEET records as arrows and the colour running from the N- to the C-terminus. The image is drawn by code, and the token ids are illustrative.'));
   function draw() {
     c.fit();
     const { ctx, w, h } = c, pal = palette(), o = OBJECTS[kind], v = vecs[kind];
-    const split = w * 0.46, objR = { x: 16, y: 34, w: split - 32, h: h - 50 }, vecR = { x: split + 10, y: 34, w: w - split - 22, h: h - 50 };
+    const one = w < NARROW, split = one ? Math.round(h * 0.4) : w * 0.46;
+    const objR = one ? { x: 8, y: 30, w: w - 16, h: split - 36 } : { x: 16, y: 34, w: split - 32, h: h - 50 };
+    const vecR = one ? { x: 8, y: split + 30, w: w - 16, h: h - split - 36 } : { x: split + 10, y: 34, w: w - split - 22, h: h - 50 };
     label(ctx, o.name, objR.x, 20, pal.fg, 14, 'left', 600);
-    label(ctx, `x ∈ ℝ${sup(o.d)}`, vecR.x, 20, hlc(['x', 'd'], pal, pal.fg), 14, 'left', 600);
-    label(ctx, `d = ${o.d}`, w - 12, 20, hlc('d', pal, pal.muted), 13, 'right');
-    ctx.strokeStyle = pal.line; ctx.beginPath(); ctx.moveTo(split, 30); ctx.lineTo(split, h - 12); ctx.stroke();
+    label(ctx, `x ∈ ℝ${sup(o.d)}`, vecR.x, vecR.y - 14, hlc(['x', 'd'], pal, pal.fg), 14, 'left', 600);
+    label(ctx, `d = ${o.d}`, w - 12, vecR.y - 14, hlc('d', pal, pal.muted), 13, 'right');
+    ctx.strokeStyle = pal.line; ctx.lineWidth = 1; ctx.beginPath();
+    if (one) { ctx.moveTo(8, split + 0.5); ctx.lineTo(w - 8, split + 0.5); } else { ctx.moveTo(split, 30); ctx.lineTo(split, h - 12); }
+    ctx.stroke();
     const hits = [];
     const mark = (g) => g === hov;
     // ---- left: the object ----
     if (kind === 'image') {
-      const s = Math.floor(Math.min(objR.w, objR.h) / 16), x0 = objR.x + (objR.w - 16 * s) / 2, y0 = objR.y + (objR.h - 16 * s) / 2;
-      for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) {
-        const val = IMG[16 * j + i], g = Math.round(255 * (live.theme === 'dark' ? val : 1 - val));
-        ctx.fillStyle = `rgb(${g},${g},${g})`; ctx.fillRect(x0 + i * s, y0 + j * s, s, s);
-      }
-      ctx.strokeStyle = pal.line; ctx.strokeRect(x0 - 0.5, y0 - 0.5, 16 * s + 1, 16 * s + 1);
-      if (hov != null) { ctx.strokeStyle = pal.mark; ctx.lineWidth = 2.5; ctx.strokeRect(x0 + (hov % 16) * s, y0 + Math.floor(hov / 16) * s, s, s); ctx.lineWidth = 1; }
+      const s = Math.floor(Math.min(objR.w, objR.h - 10) / 16), x0 = objR.x + (objR.w - 16 * s) / 2, y0 = objR.y + (objR.h - 16 * s) / 2;
+      tiles(ctx, pal, x0, y0, s, (k) => IMG[k]);
+      if (hov != null) { ctx.strokeStyle = pal.mark; ctx.lineWidth = 2.5; ctx.strokeRect(x0 + (hov % 16) * s - 1, y0 + Math.floor(hov / 16) * s - 1, s + 2, s + 2); ctx.lineWidth = 1; }
       hits.push((px, py) => (px >= x0 && px < x0 + 16 * s && py >= y0 && py < y0 + 16 * s ? 16 * Math.floor((py - y0) / s) + Math.floor((px - x0) / s) : null));
     } else if (kind === 'molecule' || kind === 'protein') {
       const pts = kind === 'molecule' ? MOL.atoms.map((a) => [a[0], a[1]]) : PROT2D.flat();
       const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
       const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
-      const sc = Math.min((objR.w - 40) / (Math.max(...xs) - Math.min(...xs)), (objR.h - 40) / (Math.max(...ys) - Math.min(...ys)));
+      const sc = Math.min((objR.w - 48) / (Math.max(...xs) - Math.min(...xs)), (objR.h - 48) / (Math.max(...ys) - Math.min(...ys)));
       const P = ([x, y]) => [objR.x + objR.w / 2 + sc * (x - cx), objR.y + objR.h / 2 - sc * (y - cy)];
       if (kind === 'molecule') {
-        MOL.bonds.forEach(([i, j, ord]) => {
-          const [X1, Y1] = P(pts[i]), [X2, Y2] = P(pts[j]), L = Math.hypot(X2 - X1, Y2 - Y1), nx = -(Y2 - Y1) / L * 3, ny = (X2 - X1) / L * 3;
-          ctx.strokeStyle = pal.muted; ctx.lineWidth = 1.6;
-          for (const o2 of ord === 2 ? [-1, 1] : [0]) { ctx.beginPath(); ctx.moveTo(X1 + o2 * nx, Y1 + o2 * ny); ctx.lineTo(X2 + o2 * nx, Y2 + o2 * ny); ctx.stroke(); }
-        });
-        const col = ELC(pal);
-        MOL.atoms.forEach((a, k) => {
-          const [X, Y] = P(pts[k]), r = mark(k) ? 15 : 12;
-          ctx.beginPath(); ctx.arc(X, Y, r, 0, 7); ctx.fillStyle = pal.bg; ctx.fill();
-          ctx.strokeStyle = mark(k) ? pal.mark : col[a[3]]; ctx.lineWidth = mark(k) ? 3 : 2; ctx.stroke();
-          label(ctx, a[3], X, Y + 5, mark(k) ? pal.mark : col[a[3]], 13, 'center', 600);
-        });
+        ballStick(ctx, pal, P, MOL.atoms.map((at) => ({ p: [at[0], at[1]], el: at[3] })), MOL.bonds, sc, { ring: hov });
         hits.push((px, py) => { let b = null, bd = 18; pts.forEach((p, k) => { const [X, Y] = P(p), dd = Math.hypot(px - X, py - Y); if (dd < bd) { bd = dd; b = k; } }); return b; });
       } else {
-        ctx.beginPath(); pts.forEach((p, i) => { const [X, Y] = P(p); (i ? ctx.lineTo : ctx.moveTo).call(ctx, X, Y); });
-        ctx.strokeStyle = pal.muted; ctx.lineWidth = 1.6; ctx.stroke();
-        PROT2D.forEach((r3, k) => {
-          // The frame of a residue: Cα, with short strokes to its N and C.
-          const [Xa, Ya] = P(r3[1]);
-          ctx.beginPath(); ctx.arc(Xa, Ya, mark(k) ? 8 : 5.5, 0, 7); ctx.fillStyle = mark(k) ? pal.mark : pal.acc; ctx.fill();
-          if (mark(k)) {
-            [[r3[0], pal.ramp[1]], [r3[2], pal.bad]].forEach(([p, cl]) => { const [X, Y] = P(p); ctx.strokeStyle = cl; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(Xa, Ya); ctx.lineTo(X, Y); ctx.stroke(); });
-            label(ctx, `${PROT.res[k]} ${k + 1}`, Xa + 12, Ya - 10, pal.mark, 13, 'left', 600);
-          }
-        });
-        label(ctx, 'N-terminus', P(PROT2D[0][0])[0], P(PROT2D[0][0])[1] + 18, pal.muted, 11, 'center');
-        hits.push((px, py) => { let b = null, bd = 16; PROT2D.forEach((r3, k) => { const [X, Y] = P(r3[1]), dd = Math.hypot(px - X, py - Y); if (dd < bd) { bd = dd; b = k; } }); return b; });
+        const sp = cartoon(ctx, pal, PROT2D.map((r3) => P(r3[1])), PROT.strands, Math.max(5, 0.75 * sc), Math.max(2.5, 0.3 * sc));
+        // One dot per residue on the centre line of the cartoon.
+        const at = PROT2D.map((_, k) => sp[Math.min(sp.length - 1, Math.round(k * 10))]);
+        at.forEach(({ x, y }, k) => { ctx.beginPath(); ctx.arc(x, y, mark(k) ? 4 : 2.2, 0, 7); ctx.fillStyle = mark(k) ? pal.mark : live.theme === 'dark' ? '#ffffff' : pal.bg; ctx.fill(); });
+        if (hov != null) {
+          const r3 = PROT2D[hov].map(P);
+          frameTri(ctx, pal, r3, pal.mark, true);
+          label(ctx, `${PROT.res[hov]} ${hov + 1}`, r3[1][0] + 12, r3[1][1] - 12, pal.mark, 13, 'left', 600);
+        }
+        // Terminus labels just beyond the two ends, along the direction of the chain.
+        const end = (i, j, s) => { const L = Math.hypot(sp[i].x - sp[j].x, sp[i].y - sp[j].y) || 1; return [sp[i].x + s * (sp[i].x - sp[j].x) / L, sp[i].y + s * (sp[i].y - sp[j].y) / L + 4]; };
+        label(ctx, 'N', ...end(0, 3, 14), pal.muted, 12, 'center', 600);
+        label(ctx, 'C', ...end(sp.length - 1, sp.length - 4, 14), pal.muted, 12, 'center', 600);
+        hits.push((px, py) => { let b = null, bd = 16; at.forEach(({ x, y }, k) => { const dd = Math.hypot(px - x, py - y); if (dd < bd) { bd = dd; b = k; } }); return b; });
       }
     } else {
-      const n = TEXT.tokens.length, bw = Math.min(110, (objR.w - 10) / n - 8), x0 = objR.x + (objR.w - n * (bw + 8)) / 2, y0 = objR.y + objR.h / 2 - 20;
-      TEXT.tokens.forEach((t, k) => {
-        const X = x0 + k * (bw + 8);
-        ctx.strokeStyle = mark(k) ? pal.mark : pal.line; ctx.lineWidth = mark(k) ? 2.5 : 1; ctx.strokeRect(X, y0, bw, 40);
-        label(ctx, t, X + bw / 2, y0 + 25, mark(k) ? pal.mark : pal.fg, 14, 'center');
+      const n = TEXT.tokens.length, gp = 8, bw = Math.min(104, (objR.w - 10) / n - gp), ch = Math.min(42, Math.max(30, 0.75 * bw)), x0 = objR.x + (objR.w - n * (bw + gp) + gp) / 2, y0 = objR.y + objR.h / 2 - 30;
+      TEXT.tokens.forEach((tk, k) => {
+        const X = x0 + k * (bw + gp);
+        chip(ctx, pal, X, y0, bw, ch, tk, mark(k) ? 'mark' : 'on', Math.min(14, bw / 4.4));
+        label(ctx, String(TEXT.ids[k]), X + bw / 2, y0 + ch + 22, mark(k) ? pal.mark : pal.muted, 11.5, 'center');
       });
-      hits.push((px, py) => (py >= y0 && py <= y0 + 40 && px >= x0 ? (Math.floor((px - x0) / (bw + 8)) < n ? Math.floor((px - x0) / (bw + 8)) : null) : null));
+      hits.push((px, py) => (py >= y0 && py <= y0 + 70 && px >= x0 ? (Math.floor((px - x0) / (bw + gp)) < n ? Math.floor((px - x0) / (bw + gp)) : null) : null));
     }
     // ---- right: the vector ----
     const sel = isHL('xj') || isHL('x');
@@ -132,8 +230,7 @@ function objects(viz) {
       const per = 64, rows = 4, sw = vecR.w / per, sh = Math.min(3 * sw, (vecR.h - 70) / rows - 6), gap = 6, x0 = vecR.x, y0 = vecR.y + 30;
       const CX = (i) => x0 + (i % per) * sw, CY = (i) => y0 + Math.floor(i / per) * (sh + gap);
       for (let i = 0; i < 256; i++) {
-        const val = IMG[i], g = Math.round(255 * (live.theme === 'dark' ? val : 1 - val));
-        ctx.fillStyle = `rgb(${g},${g},${g})`; ctx.fillRect(CX(i), CY(i), sw - (sw > 4 ? 1 : 0), sh);
+        ctx.fillStyle = cmap(pal, IMG[i]); ctx.fillRect(CX(i), CY(i), sw - (sw > 4 ? 1 : 0), sh);
       }
       if (hov != null) {
         // The image row of the hovered pixel is 16 consecutive entries.
@@ -489,7 +586,7 @@ function preview(viz) {
     const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
     const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
     const sc = Math.min((B.w - 2 * pad) / (Math.max(...xs) - Math.min(...xs)), (B.h - 2 * pad) / (Math.max(...ys) - Math.min(...ys)));
-    return ([x, y]) => [B.x + B.w / 2 + sc * (x - cx), B.y + B.h / 2 - sc * (y - cy)];
+    return Object.assign(([x, y]) => [B.x + B.w / 2 + sc * (x - cx), B.y + B.h / 2 - sc * (y - cy)], { sc });
   };
   function draw() {
     c.fit();
@@ -500,12 +597,9 @@ function preview(viz) {
     // ---- image ----
     let B = panel(ctx, pal, rects[0], 'Image', 'Gaussian noise on every pixel');
     clip(B, () => {
-      const q = Math.floor(Math.min(B.w, B.h) / 16), x0 = B.x + (B.w - 16 * q) / 2, y0 = B.y + (B.h - 16 * q) / 2;
-      for (let k = 0; k < 256; k++) {
-        const v = Math.max(0, Math.min(1, (a * (2 * IMG[k] - 1) + s * Z.img[k] + 1) / 2)), gr = Math.round(255 * (live.theme === 'dark' ? v : 1 - v));
-        ctx.fillStyle = `rgb(${gr},${gr},${gr})`; ctx.fillRect(x0 + (k % 16) * q, y0 + Math.floor(k / 16) * q, q, q);
-      }
-      ctx.strokeStyle = isHL('xt') ? pal.mark : pal.line; ctx.lineWidth = isHL('xt') ? 2 : 1; ctx.strokeRect(x0 - 0.5, y0 - 0.5, 16 * q + 1, 16 * q + 1); ctx.lineWidth = 1;
+      const q = Math.floor(Math.min(B.w, B.h - 8) / 16), x0 = B.x + (B.w - 16 * q) / 2, y0 = B.y + (B.h - 16 * q) / 2;
+      tiles(ctx, pal, x0, y0, q, (k) => (a * (2 * IMG[k] - 1) + s * Z.img[k] + 1) / 2);
+      if (isHL('xt')) { ctx.strokeStyle = pal.mark; ctx.lineWidth = 2; ctx.strokeRect(x0 - 4, y0 - 4, 16 * q + 8, 16 * q + 8); ctx.lineWidth = 1; }
     });
     // ---- molecule ----
     B = panel(ctx, pal, rects[1], 'Molecule', 'coordinates and atom types blended');
@@ -514,23 +608,12 @@ function preview(viz) {
       const ty = MOL.types.map((e, j) => a * (e === at[3] ? 1 : 0) + s * Z.typ[k][j]);
       return { p, el: MOL.types[ty.indexOf(Math.max(...ty))] };
     });
-    let nb = 0;
+    const bonds = [];
+    for (let i = 0; i < mol.length; i++) for (let j = i + 1; j < mol.length; j++) if (Math.hypot(...mol[i].p.map((v, d) => v - mol[j].p[d])) < BOND) bonds.push([i, j, 1]);
+    const nb = bonds.length;
     clip(B, () => {
-      const P = fitter(MOL.atoms.map((at) => [at[0], at[1]]), B, 26), col = ELC(pal), rA = Math.max(4.5, Math.min(10, B.w / 40, B.h / 18));
-      ctx.strokeStyle = pal.muted; ctx.lineWidth = 1.6;
-      for (let i = 0; i < mol.length; i++) for (let j = i + 1; j < mol.length; j++) {
-        if (Math.hypot(...mol[i].p.map((v, d) => v - mol[j].p[d])) >= BOND) continue;
-        nb++; const [X1, Y1] = P(mol[i].p), [X2, Y2] = P(mol[j].p);
-        ctx.beginPath(); ctx.moveTo(X1, Y1); ctx.lineTo(X2, Y2); ctx.stroke();
-      }
-      mol.forEach(({ p, el }) => {
-        const [X, Y] = P(p);
-        // Small panels draw filled dots in the element colour instead of lettered rings.
-        ctx.beginPath(); ctx.arc(X, Y, rA, 0, 7); ctx.fillStyle = rA < 7 ? col[el] : pal.bg; ctx.fill();
-        if (rA < 7) return;
-        ctx.strokeStyle = col[el]; ctx.lineWidth = 2; ctx.stroke();
-        label(ctx, el, X, Y + rA * 0.42, col[el], rA * 1.15, 'center', 600);
-      });
+      const P = fitter(MOL.atoms.map((at) => [at[0], at[1]]), B, 24);
+      ballStick(ctx, pal, P, mol, bonds, P.sc);
     });
     // ---- protein ----
     B = panel(ctx, pal, rects[2], 'Protein', 'positions blended, frames rotated');
@@ -541,28 +624,37 @@ function preview(viz) {
         // The frame turns by the remaining fraction of the angle between the noise and the data frame.
         const th = s * Z.ang[k], cs = Math.cos(th), sn = Math.sin(th);
         const rot = (u) => [q[0] + cs * (u[0] - ca[0]) - sn * (u[1] - ca[1]), q[1] + sn * (u[0] - ca[0]) + cs * (u[1] - ca[1])];
-        return [rot(n), q, rot(cc)];
+        return [rot(n), q, rot(cc)].map(P);
       });
-      ctx.beginPath(); res.flat().forEach((p, i) => { const [X, Y] = P(p); (i ? ctx.lineTo : ctx.moveTo).call(ctx, X, Y); });
-      ctx.strokeStyle = pal.faint; ctx.lineWidth = 1.2; ctx.stroke();
-      res.forEach(([n, q, cc]) => {
-        const [Xa, Ya] = P(q);
-        [[n, pal.ramp[1]], [cc, pal.bad]].forEach(([u, cl]) => { const [X, Y] = P(u); ctx.strokeStyle = cl; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(Xa, Ya); ctx.lineTo(X, Y); ctx.stroke(); });
-        ctx.beginPath(); ctx.arc(Xa, Ya, 4.5, 0, 7); ctx.fillStyle = pal.acc; ctx.fill();
-      });
+      // Near t = 1 the cartoon of step 1 fades in under the frames.
+      const fade = Math.max(0, Math.min(1, (t - 0.85) / 0.15));
+      if (fade > 0) cartoon(ctx, pal, res.map((r3) => r3[1]), PROT.strands, Math.max(4, 0.75 * P.sc), Math.max(2, 0.3 * P.sc), 0.6 * fade);
+      const sp = spline(res.map((r3) => r3[1]), 8), n = res.length;
+      ctx.lineCap = 'round'; ctx.lineWidth = 2;
+      for (let i = 0; i < sp.length - 1; i++) { ctx.strokeStyle = chainCol(pal, sp[i].u / (n - 1)); ctx.beginPath(); ctx.moveTo(sp[i].x, sp[i].y); ctx.lineTo(sp[i + 1].x, sp[i + 1].y); ctx.stroke(); }
+      ctx.lineCap = 'butt';
+      res.forEach((r3, k) => frameTri(ctx, pal, r3, chainCol(pal, k / (n - 1)), false, 0.85 - 0.25 * fade));
     });
     // ---- sentence ----
     B = panel(ctx, pal, rects[3], 'Sentence', 'tokens masked, not blended');
     const shown = Z.tok.map((u) => u < t);
     {
-      const n = TEXT.tokens.length, bw = Math.min(96, (B.w - 10) / n - 8), x0 = B.x + (B.w - n * (bw + 8) + 8) / 2, y0 = B.y + B.h / 2 - 24;
+      // Chips on top; below them a time axis with the reveal time of each token and the current t.
+      const n = TEXT.tokens.length, gp = 8, bw = Math.min(96, (B.w - 10) / n - gp), x0 = B.x + (B.w - n * (bw + gp) + gp) / 2;
+      const ch = Math.min(38, B.h * 0.22), y0 = B.y + Math.max(4, B.h * 0.12), ax0 = x0, ax1 = x0 + n * (bw + gp) - gp, ay = y0 + ch + Math.min(56, B.h * 0.36);
+      const T = (u) => ax0 + (ax1 - ax0) * u;
       TEXT.tokens.forEach((tk, k) => {
-        const X = x0 + k * (bw + 8);
-        if (!shown[k]) ctx.setLineDash([4, 3]);
-        ctx.strokeStyle = shown[k] ? pal.line : pal.muted; ctx.lineWidth = 1; ctx.strokeRect(X, y0, bw, 40); ctx.setLineDash([]);
-        label(ctx, shown[k] ? tk : 'MASK', X + bw / 2, y0 + 25, shown[k] ? pal.fg : pal.muted, shown[k] ? Math.min(14, bw / 4.2) : Math.min(11.5, bw / 4.6), 'center');
+        const X = x0 + k * (bw + gp), sz = Math.min(14, bw / 4.4);
+        ctx.strokeStyle = shown[k] ? mix(pal.bg, pal.acc, 0.5) : pal.faint; ctx.globalAlpha = shown[k] ? 1 : 0.5; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(X + bw / 2, y0 + ch); ctx.bezierCurveTo(X + bw / 2, ay - 16, T(Z.tok[k]), y0 + ch + 10, T(Z.tok[k]), ay); ctx.stroke(); ctx.globalAlpha = 1;
+        chip(ctx, pal, X, y0, bw, ch, shown[k] ? tk : 'MASK', shown[k] ? 'on' : 'masked', sz);
       });
-      label(ctx, 'Each token is revealed once t passes its own random time.', B.x + B.w / 2, y0 + 70, pal.muted, 11.5, 'center');
+      ctx.strokeStyle = pal.line; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(ax0, ay + 0.5); ctx.lineTo(ax1, ay + 0.5); ctx.stroke();
+      ctx.strokeStyle = mix(pal.bg, pal.acc, 0.8); ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(ax0, ay + 0.5); ctx.lineTo(T(t), ay + 0.5); ctx.stroke(); ctx.lineCap = 'butt';
+      Z.tok.forEach((u, k) => { ctx.beginPath(); ctx.arc(T(u), ay + 0.5, 3.5, 0, 7); ctx.fillStyle = shown[k] ? pal.acc : pal.bg; ctx.fill(); ctx.strokeStyle = shown[k] ? pal.acc : pal.faint; ctx.lineWidth = 1.2; ctx.stroke(); });
+      label(ctx, '0', ax0, ay + 17, pal.muted, 11, 'center'); label(ctx, '1', ax1, ay + 17, pal.muted, 11, 'center');
+      label(ctx, 't', T(t), ay - 8, pal.acc, 12, 'center', 600);
+      if (B.h > 150) label(ctx, 'Each token is revealed once t passes its own random time.', B.x + B.w / 2, Math.min(B.y + B.h - 4, ay + 38), pal.muted, 11.5, 'center');
     }
     ro.innerHTML = `t = <b>${t.toFixed(2)}</b> · α<sub>t</sub> = <b>${a.toFixed(2)}</b>, σ<sub>t</sub> = <b>${s.toFixed(2)}</b> · molecule: <b>${nb}</b> bonds within ${BOND} Å (caffeine has ${MOL.bonds.length}) · sentence: <b>${shown.filter(Boolean).length}</b> of ${shown.length} tokens unmasked`;
   }

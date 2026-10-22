@@ -126,18 +126,20 @@ export const IMG = (() => {
   const segs = [];
   // Upper arc, then the diagonal, then the bottom bar, in pixel coordinates.
   for (let i = 0; i < 24; i++) {
-    const a0 = Math.PI * (1.08 - 1.33 * i / 24), a1 = Math.PI * (1.08 - 1.33 * (i + 1) / 24);
-    segs.push([7.5 + 4 * Math.cos(a0), 6 - 3.6 * Math.sin(a0), 7.5 + 4 * Math.cos(a1), 6 - 3.6 * Math.sin(a1)]);
+    const a0 = Math.PI * (0.92 - 1.17 * i / 24), a1 = Math.PI * (0.92 - 1.17 * (i + 1) / 24);
+    segs.push([7.5 + 4 * Math.cos(a0), 6.9 - 3.6 * Math.sin(a0), 7.5 + 4 * Math.cos(a1), 6.9 - 3.6 * Math.sin(a1)]);
   }
   const e = segs[segs.length - 1];
-  segs.push([e[2], e[3], 3.4, 13], [3.4, 13, 12.2, 13]);
+  segs.push([e[2], e[3], 3.4, 13], [3.4, 13, 12.4, 13]);
   const dseg = (px, py, [x0, y0, x1, y1]) => {
     const dx = x1 - x0, dy = y1 - y0, t = Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / (dx * dx + dy * dy)));
     return Math.hypot(px - x0 - t * dx, py - y0 - t * dy);
   };
+  // Each pixel is the share of a 4 x 4 grid of sample points that lie within the pen width of the stroke.
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-    const d = Math.min(...segs.map((s) => dseg(i + 0.5, j + 0.5, s)));
-    out.push(Math.round(100 * Math.max(0, Math.min(1, 1.6 - d))) / 100);
+    let hit = 0;
+    for (let b = 0; b < 4; b++) for (let a = 0; a < 4; a++) hit += Math.min(...segs.map((s) => dseg(i + (a + 0.5) / 4, j + (b + 0.5) / 4, s))) < 1.15 ? 1 : 0;
+    out.push(Math.round(100 * hit / 16) / 100);
   }
   return out;
 })();
@@ -156,6 +158,8 @@ export const molVector = () => MOL.atoms.flatMap(([x, y, z, el]) => [x, y, z, ..
 // Ubiquitin, residues 1 to 16 (the first β-hairpin): backbone atoms N, Cα and C of PDB entry 1UBQ, in Å.
 export const PROT = {
   name: 'Ubiquitin, residues 1 to 16 (PDB 1UBQ)',
+  // β-strands from the SHEET records of 1UBQ (residues 1 to 7 and 10 to 17), as 0-based ranges cut at residue 16.
+  strands: [[0, 6], [9, 15]],
   res: ['MET', 'GLN', 'ILE', 'PHE', 'VAL', 'LYS', 'THR', 'LEU', 'THR', 'GLY', 'LYS', 'THR', 'ILE', 'THR', 'LEU', 'GLU'],
   bb: [[[27.34, 24.43, 2.614], [26.266, 25.413, 2.842], [26.913, 26.639, 3.531]], [[26.335, 27.77, 3.258], [26.85, 29.021, 3.898], [26.1, 29.253, 5.202]], [[26.849, 29.656, 6.217], [26.235, 30.058, 7.497], [26.882, 31.428, 7.862]], [[26.214, 32.097, 8.771], [26.772, 33.436, 9.197], [27.151, 33.362, 10.65]], [[28.26, 33.943, 11.096], [28.605, 33.965, 12.503], [28.638, 35.461, 12.9]], [[27.751, 35.867, 13.74], [27.691, 37.315, 14.143], [28.469, 37.475, 15.42]], [[29.426, 38.43, 15.446], [30.225, 38.643, 16.662], [29.664, 39.839, 17.434]], [[30.132, 40.069, 18.642], [29.607, 41.18, 19.467], [30.075, 42.538, 18.984]], [[30.991, 42.571, 17.998], [31.422, 43.94, 17.553], [30.755, 44.351, 16.277]], [[29.721, 43.673, 15.885], [28.978, 43.96, 14.678], [29.604, 43.507, 13.393]], [[30.563, 42.623, 13.495], [31.191, 42.012, 12.331], [30.459, 40.666, 12.13]], [[30.163, 40.338, 10.886], [29.542, 39.02, 10.653], [30.494, 38.261, 9.729]], [[30.795, 37.015, 10.095], [31.72, 36.289, 9.176], [30.955, 35.211, 8.459]], [[31.244, 34.986, 7.197], [30.505, 33.884, 6.512], [31.409, 32.68, 6.446]], [[30.884, 31.485, 6.666], [31.677, 30.275, 6.639], [31.022, 29.288, 5.665]], [[31.834, 28.412, 5.125], [31.22, 27.341, 4.275], [31.44, 26.079, 5.08]]],
 };
