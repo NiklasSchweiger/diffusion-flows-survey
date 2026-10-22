@@ -450,4 +450,123 @@ function mixture(viz) {
   return { draw, active: (on) => r.setActive(on) };
 }
 
-export const SCENES = { objects, samples, interval, fit1d, gauss2d, onegauss, mixture };
+// ---------- Step 8: preview, from noise to data ----------
+// One fixed noise draw per object, blended with the data point by x_t = t x1 + (1 - t) x0. Rotations
+// and tokens are not blended: frames turn along the shortest arc and tokens are unmasked at random times.
+const BOND = 1.6;   // Å, the distance below which two atoms are drawn bonded
+function noiseDraw(seed) {
+  const r = makeRng(seed), g = () => r.gauss();
+  const ca = PROT2D.map((r3) => r3[1]), mc = MOL.atoms.map((a) => a.slice(0, 3));
+  const cen = (P) => P[0].map((_, d) => P.reduce((s, p) => s + p[d], 0) / P.length);
+  const rms = (P) => { const c = cen(P); return Math.sqrt(P.reduce((s, p) => s + p.reduce((a, v, d) => a + (v - c[d]) ** 2, 0), 0) / (P.length * P[0].length)); };
+  return {
+    img: Float64Array.from({ length: 256 }, g),
+    molC: cen(mc), molS: rms(mc), mol: MOL.atoms.map(() => [g(), g(), g()]), typ: MOL.atoms.map(() => [g(), g(), g()]),
+    protC: cen(ca), protS: rms(ca), prot: ca.map(() => [g(), g()]), ang: ca.map(() => Math.PI * (2 * r.uniform() - 1)),
+    tok: TEXT.tokens.map(() => r.uniform()),
+  };
+}
+function preview(viz) {
+  // Two by two panels, or one column on narrow screens.
+  const NARROW = 560, c = makeCanvas((w) => (w < NARROW ? 0.6 : 16 / 9), { maxH: 0.7 }), ro = readout();
+  let t = 0, seed = 11, Z = noiseDraw(seed);
+  const tSl = slider('t', { min: 0, max: 1, step: 0.01, value: 0 }, (v) => { t = v; draw(); });
+  // Play runs t from its current value to 1 and stops there; at t = 1 it starts again from noise.
+  const r = runner({ step: () => { tSl.set(Math.min(1, Math.round(100 * t + 1) / 100)); if (t >= 1) { r.playing = false; r.play.textContent = 'Play'; } }, done: () => t >= 1, draw: () => {}, interval: 30 });
+  r.playing = false; r.play.textContent = 'Play';
+  const play = r.play.onclick;
+  r.play.onclick = () => { if (t >= 1 && !r.playing) tSl.set(0); play(); };
+  viz.append(c.cv, controls(tSl, r.play, button('New noise', () => { seed += 1; Z = noiseDraw(seed); draw(); })), ro,
+    note('No model is involved: each panel blends one fixed noise draw with the data point of step 1. The image is mapped to [−1, 1] first; the noise of the molecule and the protein has the spread of their coordinates. Bonds are drawn between atoms closer than 1.6 Å.'));
+  function panel(ctx, pal, R, title, sub) {
+    ctx.strokeStyle = pal.line; ctx.lineWidth = 1; ctx.strokeRect(R.x + 0.5, R.y + 0.5, R.w - 1, R.h - 1);
+    label(ctx, title, R.x + 12, R.y + 20, pal.fg, 14, 'left', 600);
+    label(ctx, sub, R.x + R.w - 12, R.y + 20, pal.muted, 11.5, 'right');
+    return { x: R.x + 12, y: R.y + 30, w: R.w - 24, h: R.h - 40 };
+  }
+  // Maps 2D points into a box, with the scale fixed by the data so that the noise can spread beyond it.
+  const fitter = (pts, B, pad) => {
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const sc = Math.min((B.w - 2 * pad) / (Math.max(...xs) - Math.min(...xs)), (B.h - 2 * pad) / (Math.max(...ys) - Math.min(...ys)));
+    return ([x, y]) => [B.x + B.w / 2 + sc * (x - cx), B.y + B.h / 2 - sc * (y - cy)];
+  };
+  function draw() {
+    c.fit();
+    const { ctx, w, h } = c, pal = palette(), a = t, s = 1 - t, g = 10;
+    const one = w < NARROW, pw = one ? w : (w - g) / 2, ph = one ? (h - 3 * g) / 4 : (h - g) / 2;
+    const rects = (one ? [[0, 0], [0, 1], [0, 2], [0, 3]] : [[0, 0], [1, 0], [0, 1], [1, 1]]).map(([i, j]) => ({ x: i * (pw + g), y: j * (ph + g), w: pw, h: ph }));
+    const clip = (B, f) => { ctx.save(); ctx.beginPath(); ctx.rect(B.x - 10, B.y - 4, B.w + 20, B.h + 12); ctx.clip(); f(); ctx.restore(); };
+    // ---- image ----
+    let B = panel(ctx, pal, rects[0], 'Image', 'Gaussian noise on every pixel');
+    clip(B, () => {
+      const q = Math.floor(Math.min(B.w, B.h) / 16), x0 = B.x + (B.w - 16 * q) / 2, y0 = B.y + (B.h - 16 * q) / 2;
+      for (let k = 0; k < 256; k++) {
+        const v = Math.max(0, Math.min(1, (a * (2 * IMG[k] - 1) + s * Z.img[k] + 1) / 2)), gr = Math.round(255 * (live.theme === 'dark' ? v : 1 - v));
+        ctx.fillStyle = `rgb(${gr},${gr},${gr})`; ctx.fillRect(x0 + (k % 16) * q, y0 + Math.floor(k / 16) * q, q, q);
+      }
+      ctx.strokeStyle = isHL('xt') ? pal.mark : pal.line; ctx.lineWidth = isHL('xt') ? 2 : 1; ctx.strokeRect(x0 - 0.5, y0 - 0.5, 16 * q + 1, 16 * q + 1); ctx.lineWidth = 1;
+    });
+    // ---- molecule ----
+    B = panel(ctx, pal, rects[1], 'Molecule', 'coordinates and atom types blended');
+    const mol = MOL.atoms.map((at, k) => {
+      const p = [0, 1, 2].map((d) => a * at[d] + s * (Z.molC[d] + Z.molS * Z.mol[k][d]));
+      const ty = MOL.types.map((e, j) => a * (e === at[3] ? 1 : 0) + s * Z.typ[k][j]);
+      return { p, el: MOL.types[ty.indexOf(Math.max(...ty))] };
+    });
+    let nb = 0;
+    clip(B, () => {
+      const P = fitter(MOL.atoms.map((at) => [at[0], at[1]]), B, 26), col = ELC(pal), rA = Math.max(4.5, Math.min(10, B.w / 40, B.h / 18));
+      ctx.strokeStyle = pal.muted; ctx.lineWidth = 1.6;
+      for (let i = 0; i < mol.length; i++) for (let j = i + 1; j < mol.length; j++) {
+        if (Math.hypot(...mol[i].p.map((v, d) => v - mol[j].p[d])) >= BOND) continue;
+        nb++; const [X1, Y1] = P(mol[i].p), [X2, Y2] = P(mol[j].p);
+        ctx.beginPath(); ctx.moveTo(X1, Y1); ctx.lineTo(X2, Y2); ctx.stroke();
+      }
+      mol.forEach(({ p, el }) => {
+        const [X, Y] = P(p);
+        // Small panels draw filled dots in the element colour instead of lettered rings.
+        ctx.beginPath(); ctx.arc(X, Y, rA, 0, 7); ctx.fillStyle = rA < 7 ? col[el] : pal.bg; ctx.fill();
+        if (rA < 7) return;
+        ctx.strokeStyle = col[el]; ctx.lineWidth = 2; ctx.stroke();
+        label(ctx, el, X, Y + rA * 0.42, col[el], rA * 1.15, 'center', 600);
+      });
+    });
+    // ---- protein ----
+    B = panel(ctx, pal, rects[2], 'Protein', 'positions blended, frames rotated');
+    clip(B, () => {
+      const P = fitter(PROT2D.flat(), B, 18);
+      const res = PROT2D.map(([n, ca, cc], k) => {
+        const q = [0, 1].map((d) => a * ca[d] + s * (Z.protC[d] + Z.protS * Z.prot[k][d]));
+        // The frame turns by the remaining fraction of the angle between the noise and the data frame.
+        const th = s * Z.ang[k], cs = Math.cos(th), sn = Math.sin(th);
+        const rot = (u) => [q[0] + cs * (u[0] - ca[0]) - sn * (u[1] - ca[1]), q[1] + sn * (u[0] - ca[0]) + cs * (u[1] - ca[1])];
+        return [rot(n), q, rot(cc)];
+      });
+      ctx.beginPath(); res.flat().forEach((p, i) => { const [X, Y] = P(p); (i ? ctx.lineTo : ctx.moveTo).call(ctx, X, Y); });
+      ctx.strokeStyle = pal.faint; ctx.lineWidth = 1.2; ctx.stroke();
+      res.forEach(([n, q, cc]) => {
+        const [Xa, Ya] = P(q);
+        [[n, pal.ramp[1]], [cc, pal.bad]].forEach(([u, cl]) => { const [X, Y] = P(u); ctx.strokeStyle = cl; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(Xa, Ya); ctx.lineTo(X, Y); ctx.stroke(); });
+        ctx.beginPath(); ctx.arc(Xa, Ya, 4.5, 0, 7); ctx.fillStyle = pal.acc; ctx.fill();
+      });
+    });
+    // ---- sentence ----
+    B = panel(ctx, pal, rects[3], 'Sentence', 'tokens masked, not blended');
+    const shown = Z.tok.map((u) => u < t);
+    {
+      const n = TEXT.tokens.length, bw = Math.min(96, (B.w - 10) / n - 8), x0 = B.x + (B.w - n * (bw + 8) + 8) / 2, y0 = B.y + B.h / 2 - 24;
+      TEXT.tokens.forEach((tk, k) => {
+        const X = x0 + k * (bw + 8);
+        if (!shown[k]) ctx.setLineDash([4, 3]);
+        ctx.strokeStyle = shown[k] ? pal.line : pal.muted; ctx.lineWidth = 1; ctx.strokeRect(X, y0, bw, 40); ctx.setLineDash([]);
+        label(ctx, shown[k] ? tk : 'MASK', X + bw / 2, y0 + 25, shown[k] ? pal.fg : pal.muted, shown[k] ? Math.min(14, bw / 4.2) : Math.min(11.5, bw / 4.6), 'center');
+      });
+      label(ctx, 'Each token is revealed once t passes its own random time.', B.x + B.w / 2, y0 + 70, pal.muted, 11.5, 'center');
+    }
+    ro.innerHTML = `t = <b>${t.toFixed(2)}</b> · α<sub>t</sub> = <b>${a.toFixed(2)}</b>, σ<sub>t</sub> = <b>${s.toFixed(2)}</b> · molecule: <b>${nb}</b> bonds within ${BOND} Å (caffeine has ${MOL.bonds.length}) · sentence: <b>${shown.filter(Boolean).length}</b> of ${shown.length} tokens unmasked`;
+  }
+  return { draw, active: (on) => r.setActive(on) };
+}
+
+export const SCENES = { objects, samples, interval, fit1d, gauss2d, onegauss, mixture, preview };

@@ -24,6 +24,7 @@ export const INTRO = `
     <li><a href="#gauss2d">Gaussians in more than one dimension</a></li>
     <li><a href="#onegauss">One Gaussian is not enough</a></li>
     <li><a href="#mixture">A mixture of Gaussians</a></li>
+    <li><a href="#preview">Preview: from noise to data</a></li>
   </ol>`;
 
 export const STEPS = [
@@ -177,6 +178,28 @@ export const STEPS = [
       fb: {
         true: 'Right. d + d(d + 1)/2 = 256 + 256 · 257/2 = 33 152 for a single component on a tiny image. For a 256 × 256 colour image the covariance alone has about 1.9 · 10¹⁰ entries. Mixtures of full Gaussians do not scale, which is why the models of the survey represent a density through a neural network instead.',
         false: 'Use d + d(d + 1)/2 from step 5 with d = 256.',
+      },
+    },
+  },
+  {
+    id: 'preview', kicker: 'Preview', title: 'From noise to data', scene: 'preview',
+    prose: [
+      'Every model in the survey turns noise into data. This step shows what that path looks like for the four objects of step 1, before any model is involved: it blends one fixed noise draw with the data point and moves the time t from 0 to 1. Press Play, or drag t. The later tutorials explain how a model learns to walk this path when it is given only the noise end.',
+      'For the image, the coordinates of the molecule and the positions of the protein, the blend is the formula below, applied entry by entry. At \\(t = 0\\) the vector is pure Gaussian noise and at \\(t = 1\\) it is the data point. The bonds of the molecule are not part of the vector; they are drawn wherever two atoms are closer than 1.6 Å, as chemistry software infers them from coordinates. Near \\(t = 0\\) they join whichever atoms happen to be close. Halfway, data and noise are each scaled by one half, so the atoms crowd together and many spurious bonds appear; the 15 bonds of caffeine emerge only close to \\(t = 1\\). The atom types are blended on their one-hot code, and each atom shows the type with the largest entry.',
+      'Two parts of the data do not fit the formula. The orientation of a residue is a rotation, and a weighted sum of two rotation matrices is in general not a rotation, so each frame instead turns along the shortest arc from a random orientation to the true one. A token id is a label, not a quantity: token 9214 is not between tokens 9213 and 9215, and a weighted sum of an id and noise names no token. Text models instead hide tokens behind a mask symbol and reveal each one at its own random time, so that at time t a fraction t of the tokens is visible on average.',
+    ],
+    tex: `${S('xt')} = ${S('alphat')}\\,${S('x1')} + ${S('sigmat')}\\,${S('x0')}, \\qquad ${S('alphat')} = ${S('t')},\\ \\ ${S('sigmat')} = 1 - ${S('t')}`,
+    after: ['The noise draw is scaled to the data: the image is first mapped to [−1, 1], and the noise of the molecule and the protein has the spread of their coordinates. Real models normalize their data for the same reason. Press "New noise" to see that the path depends on the draw, while its end point does not. §2.3 adds noise along this path to a whole dataset, and the chapters on proteins, molecules and text return to rotations, atom types and masking.'],
+    check: {
+      q: 'Why does the sentence panel mask tokens instead of using the formula on the token ids?',
+      opts: [
+        ['Gaussian noise is too expensive for text', false],
+        ['Token ids are labels without order or distance, so a weighted sum of an id and noise does not name a nearby or meaningful token', true],
+        ['Sentences have too few entries for Gaussian noise', false],
+      ],
+      fb: {
+        true: 'Right. The formula assumes that nearby numbers describe similar objects. That holds for pixel values and coordinates but not for ids, so text models corrupt tokens in a way that respects their discreteness, here by masking.',
+        false: 'Think about what the number 9214 means. Is token 9215 a slightly different version of token 9214?',
       },
     },
     closing: `<h3>Where this leads</h3>

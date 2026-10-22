@@ -31,7 +31,8 @@ export function makeCanvas(aspect, { maxH = 0.62 } = {}) {
   const obj = { cv, ctx, w: 0, h: 0 };
   obj.fit = () => {
     // Height follows the aspect ratio but never exceeds a share of the viewport, so canvas and controls fit on one screen.
-    let w = cv.clientWidth || 600, h = Math.round(w / aspect);
+    // aspect may be a function of the width, for scenes that change layout on narrow screens.
+    let w = cv.clientWidth || 600, h = Math.round(w / (typeof aspect === 'function' ? aspect(w) : aspect));
     const hmax = Math.round(innerHeight * maxH);
     if (h > hmax && innerWidth > 960) h = hmax;
     const d = Math.min(devicePixelRatio || 1, 2);
