@@ -46,9 +46,9 @@ export const STEPS = [
     },
     after: ['In this toy the classifier has a closed form: \\(p_t(A\\mid\\x) = \\sum_k p_t(k\\mid\\x)\\,p(A\\mid k)\\), the posterior of each mode times the share of A in that mode. Its log-gradient is largest between the shared mode and its neighbours, where a small move of \\(\\x\\) changes which mode the point most likely came from.'],
     check: {
-      q: 'What is p_0(A | x) at t = 0, for any x?',
+      q: 'What is \\(p_0(A\\mid\\x)\\) at \\(t = 0\\), for any \\(\\x\\)?',
       answer: 0.5, tol: 0.01,
-      fb: { true: 'Right. At t = 0 the noisy point is pure noise and independent of the data, so the posterior of \\(\\x_1\\) is the data distribution and the classifier is the prior p(A) = 1/2. Its gradient is zero, and conditional and unconditional scores agree.', false: 'At t = 0 the point \\(\\x_0\\) carries no information about \\(\\x_1\\). Average p(A | x_1) over the whole data distribution.' },
+      fb: { true: 'Right. At t = 0 the noisy point is pure noise and independent of the data, so the posterior of \\(\\x_1\\) is the data distribution and the classifier is the prior \\(p(A) = 1/2\\). Its gradient is zero, and conditional and unconditional scores agree.', false: 'At t = 0 the point \\(\\x_0\\) carries no information about \\(\\x_1\\). Average \\(p(A\\mid\\x_1)\\) over the whole data distribution.' },
     },
   },
   {
@@ -70,7 +70,7 @@ export const STEPS = [
     },
     after: ['At t = 1 every mode is a separate bump, and the weight of mode k in \\(\\pi^w_1\\) is proportional to its weight in the data times \\(p(A\\mid k)^w\\). The modes of A keep factor 1, the shared mode gets \\((1/2)^w\\) and the modes of B get 0. At high noise the classifier is nearly flat, so \\(\\pi^w_t\\) stays close to the conditional density for every w.'],
     check: {
-      q: 'All five modes have the same weight in the data. What share of π^w_1 lies on the shared mode at w = 3?',
+      q: 'All five modes have the same weight in the data. What share of \\(\\pi^w_1\\) lies on the shared mode at \\(w = 3\\)?',
       answer: 0.0588, tol: 0.004,
       fb: { true: 'Right. The weights are proportional to 1, 1 and \\((1/2)^3 = 1/8\\), so the shared mode has \\(\\tfrac{1/8}{2 + 1/8} = 1/17 \\approx 0.059\\), against 0.2 in the conditional density.', false: 'Multiply the weight of each mode by \\(p(A\\mid k)^3\\): 1 for the two modes of A, 1/8 for the shared mode, 0 for B. Then normalize.' },
     },
@@ -94,7 +94,7 @@ export const STEPS = [
     },
     after: ['There is a second, separate problem. The densities \\(\\pi^w_t\\) of step 2 are not the marginals of any noising process, because powers do not commute with Gaussian convolution, so even a sampler that followed \\(\\s^w\\) perfectly would not keep its samples distributed as \\(\\pi^w_t\\). At t = 0 the ratio of the two factors is largest: \\(h_0\\) is the average of \\(p(A\\mid\\x_1)^w\\) over all data, while \\(p_0(A\\mid\\x)^w = (1/2)^w\\).'],
     check: {
-      q: 'At t = 0 and w = 3, take p(A | x_1) to be 1, 1, 1/2, 0, 0 on the five equally likely modes. What is the ratio h_0 / p_0(A | x)^3?',
+      q: 'At \\(t = 0\\) and \\(w = 3\\), take \\(p(A\\mid\\x_1)\\) to be 1, 1, 1/2, 0 and 0 on the five equally likely modes. What is the ratio \\(h_0 / p_0(A\\mid\\x)^3\\)?',
       answer: 3.4, tol: 0.05,
       fb: { true: 'Right. \\(h_0 = \\tfrac15(1 + 1 + \\tfrac18) = 0.425\\) and \\(p_0(A\\mid\\x)^3 = (1/2)^3 = 0.125\\), a ratio of 3.4. The exact tilt is flat at t = 0, so it does not matter for the score, but at intermediate t the two factors have different shapes, and the shapes set the scores.', false: 'At t = 0 the posterior of \\(\\x_1\\) is the data. Average \\(p(A\\mid k)^3\\) over the five modes for \\(h_0\\), and cube the average of \\(p(A\\mid k)\\) for the other factor.' },
     },
@@ -108,7 +108,7 @@ export const STEPS = [
     tex: `\\s^{w}_t \\text{ for } t \\in ${ab}, \\qquad \\s_t(\\x\\mid ${c}) \\text{ otherwise}`,
     after: ['With w = 3 on all of [0, 1], the shared mode drops from a share of 0.20 to almost nothing and the leftmost mode receives 0.83. With guidance only on [0.5, 1] the shares stay close to those of the conditional model and the distance to \\(p(\\x\\mid A)\\) is smaller than without guidance. The guidance interval of Kynkäänniemi et al. is this restriction, chosen on image benchmarks.'],
     check: {
-      q: 'At t = 0.9 the noisy classifier is nearly constant within each mode. Inside one mode, by how much does the CFG score differ from the conditional score?',
+      q: 'At \\(t = 0.9\\) the noisy classifier is nearly constant within each mode. Inside one mode, by how much does the CFG score differ from the conditional score?',
       answer: 0, tol: 0.01,
       fb: { true: 'Right. The difference is \\((w - 1)\\nabla\\log p_t(c\\mid\\x)\\), which vanishes where the classifier is flat. Late guidance can only act between the modes.', false: 'Write \\(\\s^w_t - \\s_t(\\x\\mid c) = (w - 1)(\\s_t(\\x\\mid c) - \\s_t(\\x)) = (w - 1)\\nabla\\log p_t(c\\mid\\x)\\) and use that the classifier is flat.' },
     },
@@ -122,9 +122,9 @@ export const STEPS = [
     tex: `${sweak} + ${w}\\,\\big(${s}(${x}\\mid ${c}) - ${sweak}\\big)`,
     after: ['At w = 4, CFG has precision 0.81 and coverage 0.43, since nearly every sample is on the leftmost mode. Autoguidance has precision 0.92 and coverage 0.96: the modes are sharper and keep their shares. It does not remove the small leaked mass on the modes of B (a share of 0.04), because the weak model puts mass there too. Only an extrapolation away from a model without the condition removes it.'],
     check: {
-      q: 'For which value of w does autoguidance return the good model, whatever the weak model is?',
+      q: 'For which value of \\(w\\) does autoguidance return the good model, whatever the weak model is?',
       answer: 1, tol: 0.01,
-      fb: { true: 'Right. At w = 1 the weak model cancels. For w > 1 the extrapolation goes beyond the good model, away from the weak one.', false: 'Expand \\(\\s_{\\mathrm{weak}} + w(\\s - \\s_{\\mathrm{weak}}) = (1 - w)\\s_{\\mathrm{weak}} + w\\s\\) and find when the first weight is zero.' },
+      fb: { true: 'Right. At \\(w = 1\\) the weak model cancels. For \\(w > 1\\) the extrapolation goes beyond the good model, away from the weak one.', false: 'Expand \\(\\s_{\\mathrm{weak}} + w(\\s - \\s_{\\mathrm{weak}}) = (1 - w)\\s_{\\mathrm{weak}} + w\\s\\) and find when the first weight is zero.' },
     },
   },
   {
@@ -146,7 +146,7 @@ export const STEPS = [
     },
     after: ['With one particle no reweighting can happen, and the sampler draws from the conditional density, a distance of 0.28 from \\(\\pi^3_1\\). Two particles cut it to less than a third, and from about eight particles on the distance is that of 400 exact draws. CFG, with one model evaluation per step and no particles, stays at 0.86. The price is N samplers per output and a classifier-free model evaluated for every particle. §2.6 derives the same weights as importance weights of path measures, and the chapter on inference-time scaling treats SMC samplers for general rewards.'],
     check: {
-      q: 'With N = 1, what share of the outputs should land on the shared mode?',
+      q: 'With \\(N = 1\\), what share of the outputs should land on the shared mode?',
       answer: 0.2, tol: 0.02,
       fb: { true: 'Right. A single particle is never compared with another, so the output is a plain conditional sample, and the shared mode has weight 0.2 in \\(p(\\x\\mid A)\\). The run here gives 0.185 from 400 samples.', false: 'With one particle the weights cannot change which particle is returned. What is the weight of the shared mode in \\(p(\\x\\mid A)\\)?' },
     },
