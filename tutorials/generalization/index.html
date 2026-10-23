@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Why diffusion models generalize</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@500;600;700&display=swap">
+  <link rel="stylesheet" href="../lib/tutorial.css">
+  <script>
+    try { const t = localStorage.getItem('survey-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+    window.MathJax = {
+      loader: { load: ['[tex]/html'] },
+      tex: {
+        packages: { '[+]': ['html'] },
+        inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']],
+        // Same macros as paper/macros.tex, plus y, pdata, hx and vel for this page.
+        macros: {
+          bm: ['\\boldsymbol{#1}', 1], x: '\\bm{x}', s: '\\bm{s}', N: '\\mathcal{N}', dd: '\\mathrm{d}', E: '\\mathbb{E}', R: '\\mathbb{R}',
+          y: '\\bm{y}', W: '\\bm{W}', pdata: 'p_{\\mathrm{data}}', diver: '\\nabla\\!\\cdot',
+          hx: '\\hat{\\x}', vel: '\\bm{u}', KL: '\\mathrm{KL}',
+        },
+      },
+      svg: { fontCache: 'global' },
+      startup: { typeset: false },
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+  <div class="bar"><div class="bar-in">
+    <a href="../../index.html#tutorials">← All tutorials</a>
+    <span class="name">§2.7 · Why diffusion models generalize</span>
+    <span class="spacer"></span>
+    <span class="pos"></span>
+    <a href="../toolbox/">Math toolbox</a>
+    <button class="btn" id="gloss" type="button">Symbols</button>
+    <button class="btn" id="theme" type="button" aria-label="Switch theme">◐</button>
+  </div></div>
+  <main></main>
+  <script type="module">
+    import { mount } from '../lib/tutorial.js';
+    import { SYMBOLS } from './symbols.js';
+    import { STEPS, INTRO } from './steps.js';
+    import { SCENES } from './scenes.js';
+    mount({ symbols: SYMBOLS, steps: STEPS, scenes: SCENES, intro: INTRO });
+  </script>
+</body>
+</html>

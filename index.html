@@ -592,6 +592,46 @@
             <p>A diffusion model is trained on pairs of noise and data points, and the pairing can be chosen. The tutorial compares random and optimal pairings by their paths, their sampling error and their kinetic energy, then covers rectified flow and the Schrödinger bridge. It ends with reward fine-tuning as stochastic optimal control and compares the exact control with guidance and SMC.</p>
           </div>
         </a>
+        <a class="tut" href="tutorials/generalization/">
+          <div class="shot"><img class="light" src="tutorials/generalization/thumb-light.jpg" alt="" loading="lazy"><img class="dark" src="tutorials/generalization/thumb-dark.jpg" alt="" loading="lazy"></div>
+          <div class="body">
+            <div class="meta">§2.7<span>6 steps</span></div>
+            <h3>Why diffusion models generalize</h3>
+            <p>The exact minimizer of the training loss only reproduces the training set. The tutorial samples from this optimum, measures when along the path it commits to a single training point, and compares two models trained on disjoint data. It then shows which points a smoothed model still copies and how a local, shift-equivariant denoiser composes new digits from patches.</p>
+          </div>
+        </a>
+        <a class="tut" href="tutorials/architectures/">
+          <div class="shot"><img class="light" src="tutorials/architectures/thumb-light.jpg" alt="" loading="lazy"><img class="dark" src="tutorials/architectures/thumb-dark.jpg" alt="" loading="lazy"></div>
+          <div class="body">
+            <div class="meta">§2.8<span>7 steps</span></div>
+            <h3>Representations and architectures</h3>
+            <p>An autoencoder and a patch size decide how many tokens a model sees, and the noise schedule has to shift with the resolution. The tutorial shows a perfect autoencoder whose latent space a diffusion model still fills badly, derives the target of representation alignment, and compares which prediction target a narrow network can learn. It ends with attention as the empirical denoiser and with the cost of joint text and image attention.</p>
+          </div>
+        </a>
+        <a class="tut" href="tutorials/discrete/">
+          <div class="shot"><img class="light" src="tutorials/discrete/thumb-light.jpg" alt="" loading="lazy"><img class="dark" src="tutorials/discrete/thumb-dark.jpg" alt="" loading="lazy"></div>
+          <div class="body">
+            <div class="meta">§2.9<span>6 steps</span></div>
+            <h3>Discrete and language diffusion</h3>
+            <p>Diffusion on tokens replaces the noise by a Markov chain that masks or resamples them. The tutorial computes the reverse rates of this chain exactly, shows that they need the ratio of probabilities instead of the score, and derives the masked-diffusion bound on a toy language whose likelihood is known. It ends with discrete flow matching and with the errors that come from revealing several tokens in one step.</p>
+          </div>
+        </a>
+        <a class="tut" href="tutorials/hybrid/">
+          <div class="shot"><img class="light" src="tutorials/hybrid/thumb-light.jpg" alt="" loading="lazy"><img class="dark" src="tutorials/hybrid/thumb-dark.jpg" alt="" loading="lazy"></div>
+          <div class="body">
+            <div class="meta">§2.10<span>6 steps</span></div>
+            <h3>Autoregressive and hybrid visual generation</h3>
+            <p>An image can be generated pixel by pixel, scale by scale or by denoising, and each choice trades sequential steps against the dependence that one step can capture. The tutorial computes every conditional of a toy image distribution exactly, shows where parallel steps produce mixed digits, and measures what a discrete codebook loses. It ends with a diffusion head for continuous tokens and with one transformer that trains on text and images together.</p>
+          </div>
+        </a>
+        <a class="tut" href="tutorials/guidance/">
+          <div class="shot"><img class="light" src="tutorials/guidance/thumb-light.jpg" alt="" loading="lazy"><img class="dark" src="tutorials/guidance/thumb-dark.jpg" alt="" loading="lazy"></div>
+          <div class="body">
+            <div class="meta">§2.11<span>6 steps</span></div>
+            <h3>Conditioning and guidance</h3>
+            <p>A conditional model can be steered by a classifier or by the difference of two of its own predictions. The tutorial computes every score and classifier of a toy mixture exactly, shows that classifier-free guidance does not sample the sharpened density it is derived from, and compares it with the exact correction. It ends with guidance intervals, autoguidance and a particle method that reaches the target.</p>
+          </div>
+        </a>
       </div>
       <a class="toolbox" href="tutorials/toolbox/">
         <span class="k">Reference</span>
