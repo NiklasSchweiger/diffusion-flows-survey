@@ -470,7 +470,7 @@ function gauss2d(viz) {
 
 // ---------- Step 6: the best single Gaussian and its KL ----------
 function onegauss(viz) {
-  const c = makeCanvas(16 / 9), ro = readout();
+  const c = makeCanvas((w) => (w >= 640 ? 16 / 9 : 0.9)), ro = readout();
   let probe = POP.m;
   const q = (x) => phi(x, POP.m, POP.s);
   c.cv.addEventListener('pointermove', (e) => { const r = c.cv.getBoundingClientRect(); probe = Math.max(-4.5, Math.min(4.5, -4.5 + 9 * (e.clientX - r.left - 44) / (r.width - 62))); draw(); });
@@ -478,7 +478,7 @@ function onegauss(viz) {
   function draw() {
     c.fit();
     const { ctx, w, h } = c, pal = palette();
-    const a = axes1(44, w - 18, 34, h * 0.56), b = axes1(44, w - 18, h * 0.68, h - 30, -4.5, 4.5, 0.32);
+    const nar = w < 640, a = axes1(44, w - 18, nar ? 54 : 34, h * 0.56), b = axes1(44, w - 18, h * (nar ? 0.7 : 0.68), h - 30, -4.5, 4.5, 0.32);
     // Upper panel: where q exceeds p_data, shaded.
     ctx.beginPath(); XS.forEach((x, i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, a.X(x), a.Y(Math.max(q(x), pdata(x)))));
     [...XS].reverse().forEach((x) => ctx.lineTo(a.X(x), a.Y(pdata(x)))); ctx.closePath();
@@ -487,14 +487,14 @@ function onegauss(viz) {
     curve(ctx, a, q, hlc(['q', 'Nx'], pal, pal.acc), isHL('q', 'Nx') ? 3.4 : 2.4);
     baseline(ctx, pal, a, []);
     label(ctx, 'p_{data}, dashed', a.L, 22, hlc('pdata', pal, pal.muted), 13);
-    label(ctx, `q = N(${fmt(POP.m)}, ${POP.s.toFixed(2)}²), bold; red where q > p_{data}`, a.R, 22, hlc('q', pal, pal.acc), 13, 'right');
+    label(ctx, `q = N(${fmt(POP.m)}, ${POP.s.toFixed(2)}²), bold; red where q > p_{data}`, nar ? a.L : a.R, nar ? 40 : 22, hlc('q', pal, pal.acc), 13, nar ? 'left' : 'right');
     // Lower panel: the KL integrand, which can be negative where q > p_data.
-    const f = (x) => { const p = pdata(x); return p > 1e-12 ? p * Math.log(p / q(x)) : 0; }, Yb = (v) => b.bot - (b.bot - b.top) * (v + 0.1) / 0.42;
+    const f = (x) => { const p = pdata(x); return p > 1e-12 ? p * Math.log(p / q(x)) : 0; }, fs = XS.map(f), flo = Math.min(...fs), fhi = Math.max(...fs), Yb = (v) => b.bot - (b.bot - b.top - 12) * (v - flo) / (fhi - flo);
     ctx.strokeStyle = pal.line; ctx.beginPath(); ctx.moveTo(b.L, Yb(0)); ctx.lineTo(b.R, Yb(0)); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(b.X(-4.5), Yb(0)); XS.forEach((x) => ctx.lineTo(b.X(x), Yb(f(x)))); ctx.lineTo(b.X(4.5), Yb(0)); ctx.closePath();
     ctx.fillStyle = hlc('KL', pal, pal.acc2); ctx.globalAlpha = isHL('KL') ? 0.45 : 0.25; ctx.fill(); ctx.globalAlpha = 1;
     ctx.beginPath(); XS.forEach((x, i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, b.X(x), Yb(f(x)))); ctx.strokeStyle = pal.acc2; ctx.lineWidth = 1.8; ctx.stroke();
-    label(ctx, 'p_{data} log(p_{data} / q); its signed area is KL(p_{data} ‖ q)', b.L, b.top - 8, hlc('KL', pal, pal.acc2), 13);
+    label(ctx, nar ? 'p_{data} log(p_{data} / q), area KL(p_{data} ‖ q)' : 'p_{data} log(p_{data} / q); its signed area is KL(p_{data} ‖ q)', b.L, b.top - 8, hlc('KL', pal, pal.acc2), 13);
     [-4, -2, 0, 2, 4].forEach((t) => label(ctx, String(t).replace('-', '−'), b.X(t), b.bot + 16, pal.muted, 11, 'center'));
     // Probe.
     const X = a.X(probe);

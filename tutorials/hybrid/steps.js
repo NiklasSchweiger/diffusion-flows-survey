@@ -105,7 +105,7 @@ export const STEPS = [
       'An autoregressive model over discrete tokens needs a quantizer that maps each patch of the image to one of K codes. The model then predicts codes with a cross-entropy loss, and the decoder maps them back. Whatever the quantizer removes cannot be generated, however good the model of the codes is.',
       'Here the image is cut into 36 patches of 2 × 2 pixels, and each patch is replaced by the nearest of K codes found by k-means on the patches of 400 draws. The images show one test draw, its reconstruction from the codes and the error. The plot shows the error per pixel over 200 test draws against K on logarithmic axes, with the pixel noise \\(\\eta^2\\) marked.',
     ],
-    tex: `\\E\\|\\x - Q_${K}(\\x)\\|^2 \\ \\propto\\ ${K}^{-2/${d}}`,
+    tex: `\\E\\|\\x - Q_{${K}}(\\x)\\|^2 \\ \\propto\\ ${K}^{-2/${d}}`,
     deriv: {
       have: ['K codes that tile a region of volume V in d dimensions.', 'Each patch is replaced by the centre of its cell.'],
       goal: '\\text{error} \\propto K^{-2/d}',
