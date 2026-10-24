@@ -245,7 +245,7 @@
 <main>
   <div class="col gutter" style="padding-top:40px">
     <p class="lede">This page accompanies a survey of diffusion and flow models. It follows a model through five stages: pretraining, adaptation, alignment, compression and search. Each stage has one or more animations, and each animation links to the section of the paper that treats it in full.</p>
-    <p>Most animations use two-dimensional Gaussian mixtures. For a mixture of Gaussians the score, the velocity field and the posterior mean are available in closed form at every noise level, so the arrows and trajectories you see are the exact fields and not the output of a trained network. Where an animation uses something else, such as a trained network, a hand-written model or a schematic, the caption says so. The animations run in your browser from the same code that renders the figures in the paper. The fundamentals of Chapter 2 also have <a href="#tutorials">interactive tutorials</a>, which derive each result step by step next to a plot you can change.</p>
+    <p>Most animations use two-dimensional Gaussian mixtures. For a mixture of Gaussians the score, the velocity field and the posterior mean are available in closed form at every noise level, so the arrows and trajectories you see are the exact fields and not the output of a trained network. Where an animation uses something else, such as a trained network, a hand-written model or a schematic, the caption says so. The animations run in your browser from the same code that renders the figures in the paper. The fundamentals of Chapter 2 and Chapters 4 to 6 also have <a href="#tutorials">interactive tutorials</a>, which derive each result step by step next to a plot you can change.</p>
     <div class="note">
       <p><strong>Notation.</strong> Time runs from noise to data. At \(t=0\) the state is noise and at \(t=1\) it is data, with \(x_t=\alpha_t x_1+\sigma_t x_0\), \(x_0\sim\mathcal N(0,I)\) and \(x_1\) drawn from the data. Score-based diffusion and many image codebases use the opposite direction.</p>
       <p><strong>Controls.</strong> An animation plays while it is on screen. Click the frame or the play button to pause, drag the slider to scrub, and use the chapter buttons to jump. After clicking a figure, the arrow keys step one second. On a narrow screen the text inside each frame is small, and the caption below it describes the same content.</p>
@@ -530,9 +530,9 @@
 
   <!-- Tutorials -->
   <section class="stage" id="tutorials">
-    <div class="stage-head gutter"><span class="stage-num">Tutorials · Chapter 2</span><h2>Deriving the fundamentals step by step</h2></div>
+    <div class="stage-head gutter"><span class="stage-num">Tutorials · Chapters 2, 4, 5 and 6</span><h2>Deriving the results step by step</h2></div>
     <div class="col gutter">
-      <p>Each tutorial follows one section of Chapter 2. A step states a result, shows it in a plot you can change and derives it one line at a time, with a hint for every line that names the rule it uses. As in the animations, the targets are Gaussian mixtures, so every density, score and velocity in the plots is exact.</p>
+      <p>Each tutorial follows one section of Chapter 2 or one of Chapters 4 to 6. A step states a result, shows it in a plot you can change and derives it one line at a time, with a hint for every line that names the rule it uses. As in the animations, the targets are Gaussian mixtures, so every density, score and velocity in the plots is exact.</p>
     </div>
     <div class="wide gutter">
       <div class="tuts">
@@ -630,6 +630,30 @@
             <div class="meta">§2.11<span>6 steps</span></div>
             <h3>Conditioning and guidance</h3>
             <p>A conditional model can be steered by a classifier or by the difference of two of its own predictions. The tutorial computes every score and classifier of a toy mixture exactly, shows that classifier-free guidance does not sample the sharpened density it is derived from, and compares it with the exact correction. It ends with guidance intervals, autoguidance and a particle method that reaches the target.</p>
+          </div>
+        </a>
+        <a class="tut" href="tutorials/post-training/">
+          <div class="shot"><img class="light" src="tutorials/post-training/thumb-light.jpg" alt="" loading="lazy"><img class="dark" src="tutorials/post-training/thumb-dark.jpg" alt="" loading="lazy"></div>
+          <div class="body">
+            <div class="meta">§4<span>7 steps</span></div>
+            <h3>Reward fine-tuning and preference alignment</h3>
+            <p>Post-training moves a model toward samples with a higher reward without losing what it already does well. The tutorial starts from the tilted density that such training should produce and trains a small model toward it in the page, with policy gradients, gradients through the sampler, preference pairs and stochastic optimal control. Every density and KL along the way is exact.</p>
+          </div>
+        </a>
+        <a class="tut" href="tutorials/distillation/">
+          <div class="shot"><img class="light" src="tutorials/distillation/thumb-light.jpg" alt="" loading="lazy"><img class="dark" src="tutorials/distillation/thumb-dark.jpg" alt="" loading="lazy"></div>
+          <div class="body">
+            <div class="meta">§5<span>7 steps</span></div>
+            <h3>Distillation and few-step generation</h3>
+            <p>A student can learn to cover the path of the sampling ODE in a few steps or in one. The tutorial defines the flow map that every student approximates, computes it exactly for a 1D mixture, and measures progressive distillation, consistency models, reflow, average velocities and distribution matching against it.</p>
+          </div>
+        </a>
+        <a class="tut" href="tutorials/inference-time/">
+          <div class="shot"><img class="light" src="tutorials/inference-time/thumb-light.jpg" alt="" loading="lazy"><img class="dark" src="tutorials/inference-time/thumb-dark.jpg" alt="" loading="lazy"></div>
+          <div class="body">
+            <div class="meta">§6<span>6 steps</span></div>
+            <h3>Inference-time scaling</h3>
+            <p>A trained model can be improved by spending more network evaluations when it samples. The tutorial compares solvers, best-of-N, noise search, posterior sampling for an inverse problem and sequential Monte Carlo at equal compute, and ends with what happens when the reward used for selection is wrong.</p>
           </div>
         </a>
       </div>
