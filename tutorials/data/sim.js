@@ -188,9 +188,35 @@ export const PROT2D = (() => {
   return PROT.bb.map((r) => r.map((p) => [dot(sub(p, cen), v1), dot(sub(p, cen), v2)]));
 })();
 
-// A short sentence as token ids. The vocabulary is illustrative: real tokenizers split words into
-// pieces and use tens of thousands of ids.
+// A short sentence as token ids. The ids are illustrative: real tokenizers split words into pieces.
+// V is the vocabulary size of GPT-2 and E the embedding width of GPT-2 small; the embedding values
+// are seeded Gaussian draws with the spread of a trained table, not learned ones.
 export const TEXT = {
+  sentence: 'noise slowly turns into data.',
   tokens: ['noise', 'slowly', 'turns', 'into', 'data', '.'],
   ids: [9214, 15872, 7731, 1061, 2305, 13],
+  V: 50257, E: 768,
 };
+export const EMB = (() => {
+  const rng = makeRng(23);
+  return TEXT.ids.map(() => Float64Array.from({ length: TEXT.E }, () => Math.round(1000 * 0.12 * rng.gauss()) / 1000));
+})();
+
+// A 12 x 12 colour picture (sky, sun and two hills), stored as three channels of 8-bit values in
+// the order R, G, B, each row after row. Each pixel averages a 4 x 4 grid of sample points.
+export const CIMG = (() => {
+  const n = 12, R = [], G = [], B = [];
+  const at = (x, y) => {
+    if (Math.hypot(x - 8.6, y - 3.1) < 1.9) return [255, 200, 60];
+    if (y > 9.6 + 0.9 * Math.cos((x - 9) / 2.1)) return [46, 122, 58];
+    if (y > 7.4 + 1.4 * Math.cos((x - 3.2) / 2.6)) return [104, 176, 84];
+    const u = Math.min(1, y / 8);
+    return [72 + 100 * u, 140 + 70 * u, 226 + 22 * u];
+  };
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const c = [0, 0, 0];
+    for (let b = 0; b < 4; b++) for (let a = 0; a < 4; a++) at(i + (a + 0.5) / 4, j + (b + 0.5) / 4).forEach((v, k) => (c[k] += v / 16));
+    R.push(Math.round(c[0])); G.push(Math.round(c[1])); B.push(Math.round(c[2]));
+  }
+  return { n, ch: [R, G, B] };
+})();

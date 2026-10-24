@@ -6,7 +6,7 @@ import { makeRng } from '../../animations/lib/rng.js';
 import {
   MIX2, pdata, phi, SAMPLES, NMAX, probInterval, histogram, NFIT, avgLogLik, sampleMoments,
   POP, KL_GAUSS, H_DATA, mixDens, emRun, EM_ITERS, SAMPLES2, N2, FIT2, avgLogLik2, nParams,
-  IMG, MOL, molVector, PROT, protVector, PROT2D, TEXT,
+  IMG, CIMG, MOL, molVector, PROT, protVector, PROT2D, TEXT, EMB,
 } from './sim.js';
 import { p2 } from '../ebm-langevin/sim.js';
 
@@ -154,41 +154,62 @@ function chip(ctx, pal, X, Y, w, h, text, state, size = 14) {
   label(ctx, text, X + w / 2, Y + h / 2 + size * 0.34, state === 'mark' ? pal.mark : pal.fg, size, 'center', 600);
 }
 const OBJECTS = {
-  image: { name: 'Image', d: 256, groups: 256, vec: () => IMG },
+  image: { name: 'Grayscale image', d: 256 },
+  colour: { name: 'Colour image', d: 3 * CIMG.n * CIMG.n },
   molecule: { name: 'Molecule', d: 84, groups: 14, vec: molVector, cols: ['x', 'y', 'z', 'C', 'N', 'O'] },
   protein: { name: 'Protein', d: 96, groups: 16, vec: protVector, cols: ['x', 'y', 'z', 'ω₁', 'ω₂', 'ω₃'] },
-  text: { name: 'Sentence', d: 6, groups: 6, vec: () => TEXT.ids, cols: ['id'] },
+  text: { name: 'Language', d: 6 },
 };
+// 8-bit values of the grayscale image, and text colours that stay readable on a filled cell.
+const IMG8 = IMG.map((v) => Math.round(255 * v));
+const onFill = (c) => { const [r, g, b] = rgb(c); return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#1b1b2a' : '#ffffff'; };
+const CHN = ['R', 'G', 'B'];
+const chnCol = (k) => ['#d64550', '#2f9e5b', '#3d6fd9'][k];
+const pixCol = (k) => `rgb(${CIMG.ch[0][k]},${CIMG.ch[1][k]},${CIMG.ch[2][k]})`;
+const grp = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const embCol = (pal, v) => mix(pal.bg, v >= 0 ? pal.ramp[1] : pal.bad, Math.min(1, Math.abs(v) / 0.3));
 function objects(viz) {
   // Object and vector side by side, or stacked on narrow screens.
-  const NARROW = 560, c = makeCanvas((w) => (w < NARROW ? 0.5 : 16 / 9), { maxH: 0.66 }), ro = readout();
-  let kind = 'image', hov = null;
-  const vecs = Object.fromEntries(Object.entries(OBJECTS).map(([k, o]) => [k, o.vec()]));
-  const btns = Object.entries(OBJECTS).map(([k, o]) => button(o.name, () => { kind = k; hov = null; btns.forEach((b) => b.classList.toggle('on', b === btns[Object.keys(OBJECTS).indexOf(kind)])); draw(); }, k === kind ? 'on' : ''));
+  const NARROW = 560, c = makeCanvas((w) => (w < NARROW ? 0.42 : 16 / 9), { maxH: 0.7 }), ro = readout();
+  let kind = 'image', hov = null, win = colourWindow(null), inTable = false;
+  const vecs = { molecule: molVector(), protein: protVector() };
+  const btns = Object.entries(OBJECTS).map(([k, o]) => button(o.name, () => { kind = k; hov = null; win = colourWindow(null); btns.forEach((b) => b.classList.toggle('on', b === btns[Object.keys(OBJECTS).indexOf(kind)])); draw(); }, k === kind ? 'on' : ''));
   let hit = () => null;
-  c.cv.addEventListener('pointermove', (e) => { const r = c.cv.getBoundingClientRect(); hov = hit(e.clientX - r.left, e.clientY - r.top); draw(); });
-  c.cv.addEventListener('pointerleave', () => { hov = null; draw(); });
-  viz.append(c.cv, controls(...btns), ro, note('Caffeine: 3D conformer of PubChem CID 2519, heavy atoms only. Protein: residues 1 to 16 of ubiquitin, PDB entry 1UBQ, drawn in the plane of largest spread, with the two β-strands of its SHEET records as arrows and the colour running from the N- to the C-terminus. The image is drawn by code, and the token ids are illustrative.'));
+  c.cv.addEventListener('pointermove', (e) => { const r = c.cv.getBoundingClientRect(); inTable = false; hov = hit(e.clientX - r.left, e.clientY - r.top); if (!inTable) win = colourWindow(hov); draw(); });
+  c.cv.addEventListener('pointerleave', () => { hov = null; win = colourWindow(null); draw(); });
+  viz.append(c.cv, controls(...btns), ro, note('Both images are drawn by code. Caffeine: 3D conformer of PubChem CID 2519, heavy atoms only. Protein: residues 1 to 16 of ubiquitin, PDB entry 1UBQ, drawn in the plane of largest spread, with the two β-strands of its SHEET records as arrows and the colour running from the N- to the C-terminus. Language: the vocabulary size is that of GPT-2 and the embedding width that of GPT-2 small; the token ids and the embedding values are illustrative.'));
   function draw() {
     c.fit();
     const { ctx, w, h } = c, pal = palette(), o = OBJECTS[kind], v = vecs[kind];
-    const one = w < NARROW, split = one ? Math.round(h * 0.4) : w * 0.46;
+    const one = w < NARROW, split = one ? Math.round(h * 0.36) : w * 0.42;
     const objR = one ? { x: 8, y: 30, w: w - 16, h: split - 36 } : { x: 16, y: 34, w: split - 32, h: h - 50 };
-    const vecR = one ? { x: 8, y: split + 30, w: w - 16, h: h - split - 36 } : { x: split + 10, y: 34, w: w - split - 22, h: h - 50 };
+    const vecR = one ? { x: 8, y: split + 30, w: w - 16, h: h - split - 36 } : { x: split + 14, y: 34, w: w - split - 26, h: h - 50 };
     label(ctx, o.name, objR.x, 20, pal.fg, 14, 'left', 600);
-    label(ctx, `x ∈ ℝ${sup(o.d)}`, vecR.x, vecR.y - 14, hlc(['x', 'd'], pal, pal.fg), 14, 'left', 600);
-    label(ctx, `d = ${o.d}`, w - 12, vecR.y - 14, hlc('d', pal, pal.muted), 13, 'right');
+    if (kind === 'text') label(ctx, 'Three ways to write the sentence as x', vecR.x, vecR.y - 14, hlc('x', pal, pal.fg), 14, 'left', 600);
+    else {
+      label(ctx, `x ∈ ℝ${sup(o.d)}`, vecR.x, vecR.y - 14, hlc(['x', 'd'], pal, pal.fg), 14, 'left', 600);
+      label(ctx, `d = ${o.d}`, w - 12, vecR.y - 14, hlc('d', pal, pal.muted), 13, 'right');
+    }
     ctx.strokeStyle = pal.line; ctx.lineWidth = 1; ctx.beginPath();
     if (one) { ctx.moveTo(8, split + 0.5); ctx.lineTo(w - 8, split + 0.5); } else { ctx.moveTo(split, 30); ctx.lineTo(split, h - 12); }
     ctx.stroke();
     const hits = [];
     const mark = (g) => g === hov;
+    const sel = isHL('xj') || isHL('x');
+    const ring = (X, Y, W, H, col = pal.mark, lw = 2.5) => { ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.strokeRect(X, Y, W, H); ctx.lineWidth = 1; };
     // ---- left: the object ----
     if (kind === 'image') {
       const s = Math.floor(Math.min(objR.w, objR.h - 10) / 16), x0 = objR.x + (objR.w - 16 * s) / 2, y0 = objR.y + (objR.h - 16 * s) / 2;
       tiles(ctx, pal, x0, y0, s, (k) => IMG[k]);
-      if (hov != null) { ctx.strokeStyle = pal.mark; ctx.lineWidth = 2.5; ctx.strokeRect(x0 + (hov % 16) * s - 1, y0 + Math.floor(hov / 16) * s - 1, s + 2, s + 2); ctx.lineWidth = 1; }
+      if (hov != null) ring(x0 + (hov % 16) * s - 1, y0 + Math.floor(hov / 16) * s - 1, s + 2, s + 2);
       hits.push((px, py) => (px >= x0 && px < x0 + 16 * s && py >= y0 && py < y0 + 16 * s ? 16 * Math.floor((py - y0) / s) + Math.floor((px - x0) / s) : null));
+    } else if (kind === 'colour') {
+      const n = CIMG.n, s = Math.floor(Math.min(objR.w, objR.h - 10) / n), x0 = objR.x + (objR.w - n * s) / 2, y0 = objR.y + (objR.h - n * s) / 2;
+      for (let k = 0; k < n * n; k++) { ctx.fillStyle = pixCol(k); ctx.fillRect(x0 + (k % n) * s, y0 + Math.floor(k / n) * s, s + 0.6, s + 0.6); }
+      const [wr, wc] = win;
+      ring(x0 + wc * s - 1, y0 + wr * s - 1, 4 * s + 2, 4 * s + 2, pal.fg, 1.5);
+      if (hov != null) ring(x0 + (hov % n) * s - 1, y0 + Math.floor(hov / n) * s - 1, s + 2, s + 2);
+      hits.push((px, py) => (px >= x0 && px < x0 + n * s && py >= y0 && py < y0 + n * s ? n * Math.floor((py - y0) / s) + Math.floor((px - x0) / s) : null));
     } else if (kind === 'molecule' || kind === 'protein') {
       const pts = kind === 'molecule' ? MOL.atoms.map((a) => [a[0], a[1]]) : PROT2D.flat();
       const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
@@ -215,38 +236,129 @@ function objects(viz) {
         hits.push((px, py) => { let b = null, bd = 16; at.forEach(({ x, y }, k) => { const dd = Math.hypot(px - x, py - y); if (dd < bd) { bd = dd; b = k; } }); return b; });
       }
     } else {
-      const n = TEXT.tokens.length, gp = 8, bw = Math.min(104, (objR.w - 10) / n - gp), ch = Math.min(42, Math.max(30, 0.75 * bw)), x0 = objR.x + (objR.w - n * (bw + gp) + gp) / 2, y0 = objR.y + objR.h / 2 - 30;
+      // The sentence, an arrow for the tokenizer, the token chips and their ids.
+      const n = TEXT.tokens.length, gp = one ? 5 : 8, bw = Math.min(104, (objR.w - 10) / n - gp), ch = Math.min(40, Math.max(28, 0.75 * bw));
+      const x0 = objR.x + (objR.w - n * (bw + gp) + gp) / 2, cy = objR.y + objR.h / 2, y0 = cy - ch / 2 + (one ? 6 : 10);
+      label(ctx, `“${TEXT.sentence}”`, objR.x + objR.w / 2, y0 - (one ? 44 : 70), pal.fg, one ? 15 : 18, 'center', 500);
+      const ay0 = y0 - (one ? 34 : 56), ay1 = y0 - 10;
+      ctx.strokeStyle = pal.muted; ctx.fillStyle = pal.muted; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(objR.x + objR.w / 2, ay0); ctx.lineTo(objR.x + objR.w / 2, ay1 - 5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(objR.x + objR.w / 2 - 4.5, ay1 - 6); ctx.lineTo(objR.x + objR.w / 2 + 4.5, ay1 - 6); ctx.lineTo(objR.x + objR.w / 2, ay1); ctx.fill(); ctx.lineWidth = 1;
+      label(ctx, 'tokenizer', objR.x + objR.w / 2 + 10, (ay0 + ay1) / 2 + 4, pal.muted, 12);
       TEXT.tokens.forEach((tk, k) => {
         const X = x0 + k * (bw + gp);
         chip(ctx, pal, X, y0, bw, ch, tk, mark(k) ? 'mark' : 'on', Math.min(14, bw / 4.4));
-        label(ctx, String(TEXT.ids[k]), X + bw / 2, y0 + ch + 22, mark(k) ? pal.mark : pal.muted, 11.5, 'center');
+        label(ctx, String(TEXT.ids[k]), X + bw / 2, y0 + ch + 20, mark(k) ? pal.mark : pal.muted, 11.5, 'center');
       });
-      hits.push((px, py) => (py >= y0 && py <= y0 + 70 && px >= x0 ? (Math.floor((px - x0) / (bw + gp)) < n ? Math.floor((px - x0) / (bw + gp)) : null) : null));
+      if (!one) label(ctx, 'token ids', objR.x + objR.w / 2, y0 + ch + 44, pal.faint, 11.5, 'center');
+      hits.push((px, py) => (py >= y0 && py <= y0 + ch + 26 && px >= x0 ? (Math.floor((px - x0) / (bw + gp)) < n ? Math.floor((px - x0) / (bw + gp)) : null) : null));
     }
-    // ---- right: the vector ----
-    const sel = isHL('xj') || isHL('x');
+    // ---- right: the numbers and the vector ----
     if (kind === 'image') {
-      // 256 cells in 4 lines of 64: four image rows per line, one after another.
-      const per = 64, rows = 4, sw = vecR.w / per, sh = Math.min(3 * sw, (vecR.h - 70) / rows - 6), gap = 6, x0 = vecR.x, y0 = vecR.y + 30;
-      const CX = (i) => x0 + (i % per) * sw, CY = (i) => y0 + Math.floor(i / per) * (sh + gap);
-      for (let i = 0; i < 256; i++) {
-        ctx.fillStyle = cmap(pal, IMG[i]); ctx.fillRect(CX(i), CY(i), sw - (sw > 4 ? 1 : 0), sh);
+      // The 16 x 16 matrix of 8-bit values, then the same values in one row after another.
+      const cw = vecR.w / 16, chh = Math.min(cw * 0.78, (vecR.h - 92) / 16), x0 = vecR.x, y0 = vecR.y + 26, font = Math.max(7.5, Math.min(11, cw * 0.36, chh * 0.55));
+      label(ctx, 'Pixel values from 0 (background) to 255 (ink)', x0, y0 - 10, pal.muted, 11.5);
+      for (let k = 0; k < 256; k++) {
+        const X = x0 + (k % 16) * cw, Y = y0 + Math.floor(k / 16) * chh, col = cmap(pal, IMG[k]);
+        ctx.fillStyle = col; ctx.fillRect(X + 0.5, Y + 0.5, cw - 1, chh - 1);
+        label(ctx, String(IMG8[k]), X + cw / 2, Y + chh / 2 + font * 0.36, mark(k) || sel ? pal.mark : onFill(col), font, 'center', mark(k) ? 700 : 500);
       }
-      if (hov != null) {
-        // The image row of the hovered pixel is 16 consecutive entries.
-        const r0 = 16 * Math.floor(hov / 16);
-        ctx.strokeStyle = pal.acc; ctx.lineWidth = 1.5; ctx.strokeRect(CX(r0) - 1, CY(r0) - 1, 16 * sw + 1, sh + 2);
-        ctx.strokeStyle = pal.mark; ctx.lineWidth = 2.5; ctx.strokeRect(CX(hov) - 1, CY(hov) - 2, sw + 1, sh + 4); ctx.lineWidth = 1;
+      if (hov != null) { ring(x0 + (hov % 16) * cw - 1, y0 + Math.floor(hov / 16) * chh - 1, cw + 2, chh + 2); }
+      if (sel) ring(x0 - 3, y0 - 3, 16 * cw + 6, 16 * chh + 6, pal.mark, 2);
+      // Flattened: four image rows per line of 64 entries.
+      const per = 64, sw = vecR.w / per, sh = Math.max(5, Math.min(9, (vecR.h - 26 - 16 * chh - 50) / 4 - 3)), gap = 3, fy = y0 + 16 * chh + 34;
+      label(ctx, 'Read row after row, the matrix becomes the vector x:', x0, fy - 10, pal.muted, 11.5);
+      const CX = (i) => x0 + (i % per) * sw, CY = (i) => fy + Math.floor(i / per) * (sh + gap);
+      for (let i = 0; i < 256; i++) { ctx.fillStyle = cmap(pal, IMG[i]); ctx.fillRect(CX(i), CY(i), sw - (sw > 4 ? 1 : 0), sh); }
+      if (hov != null) ring(CX(hov) - 1, CY(hov) - 2, sw + 1, sh + 4, pal.mark, 2);
+      label(ctx, 'x_{1}', x0, CY(255) + sh + 15, pal.muted, 11.5);
+      label(ctx, 'x_{256}', x0 + per * sw, CY(255) + sh + 15, pal.muted, 11.5, 'right');
+      hits.push((px, py) => { const i = Math.floor((px - x0) / cw), j = Math.floor((py - y0) / chh); return i >= 0 && i < 16 && j >= 0 && j < 16 ? 16 * j + i : null; });
+      hits.push((px, py) => { const j = Math.floor((py - fy) / (sh + gap)), i = Math.floor((px - x0) / sw); return j >= 0 && j < 4 && py - fy - j * (sh + gap) <= sh && i >= 0 && i < per ? j * per + i : null; });
+    } else if (kind === 'colour') {
+      // Three channel images, the numbers of a 4 x 4 window, and the vector channel after channel.
+      const n = CIMG.n, gap = one ? 10 : 16, q = Math.floor(Math.min((vecR.w - 2 * gap) / (3 * n), (vecR.h - 26) * 0.26 / n)), x0 = vecR.x, y0 = vecR.y + 24;
+      const [wr, wc] = win;
+      for (let c3 = 0; c3 < 3; c3++) {
+        const X0 = x0 + c3 * (n * q + gap);
+        for (let k = 0; k < n * n; k++) { ctx.fillStyle = mix(live.theme === 'dark' ? '#000000' : '#111111', chnCol(c3), CIMG.ch[c3][k] / 255); ctx.fillRect(X0 + (k % n) * q, y0 + Math.floor(k / n) * q, q + 0.6, q + 0.6); }
+        ring(X0 + wc * q - 0.5, y0 + wr * q - 0.5, 4 * q + 1, 4 * q + 1, '#ffffff', 1.2);
+        if (hov != null) ring(X0 + (hov % n) * q - 1, y0 + Math.floor(hov / n) * q - 1, q + 2, q + 2, pal.mark, 2);
+        label(ctx, `${CHN[c3]} channel`, X0, y0 - 8, chnCol(c3), 11.5, 'left', 600);
       }
-      if (sel) { ctx.strokeStyle = pal.mark; ctx.lineWidth = 2; ctx.strokeRect(x0 - 3, y0 - 3, per * sw + 5, rows * (sh + gap) - gap + 6); ctx.lineWidth = 1; }
-      label(ctx, 'x_{1}', x0, y0 - 8, pal.muted, 11.5);
-      label(ctx, 'x_{64}', x0 + per * sw, y0 - 8, pal.muted, 11.5, 'right');
-      label(ctx, 'x_{256}', x0 + per * sw, CY(255) + sh + 16, pal.muted, 11.5, 'right');
-      label(ctx, 'Four image rows per line, 16 entries each.', x0, CY(255) + sh + 40, pal.muted, 11.5);
-      hits.push((px, py) => { const j = Math.floor((py - y0) / (sh + gap)), i = Math.floor((px - x0) / sw); return j >= 0 && j < rows && py - y0 - j * (sh + gap) <= sh && i >= 0 && i < per ? j * per + i : null; });
+      const ty = y0 + n * q + 34, cw = Math.min(one ? 80 : 74, vecR.w / 4.6), chh = Math.min(48, (vecR.h - (ty - vecR.y) - 70) / 4), font = Math.max(9, Math.min(11.5, chh / 4.2));
+      label(ctx, 'Values in the outlined window, R, G and B from 0 to 255', x0, ty - 10, pal.muted, 11.5);
+      for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) {
+        const k = (wr + a) * n + wc + b, X = x0 + b * cw, Y = ty + a * chh;
+        ctx.fillStyle = pixCol(k); ctx.fillRect(X + 1, Y + 1, 7, chh - 2);
+        if (mark(k)) { ctx.fillStyle = pal.mark; ctx.globalAlpha = 0.14; ctx.fillRect(X + 1, Y + 1, cw - 2, chh - 2); ctx.globalAlpha = 1; }
+        ctx.strokeStyle = pal.line; ctx.strokeRect(X + 0.5, Y + 0.5, cw - 1, chh - 1);
+        for (let c3 = 0; c3 < 3; c3++) label(ctx, String(CIMG.ch[c3][k]), X + cw - 8, Y + chh * (c3 + 1) / 3.3 + font * 0.2, chnCol(c3), font, 'right', 600);
+      }
+      if (hov != null) { const a = Math.floor(hov / n) - wr, b = (hov % n) - wc; ring(x0 + b * cw, ty + a * chh, cw, chh); }
+      // Flattened: one line per channel.
+      const per = n * n, sw = vecR.w / per, sh = 7, fy = ty + 4 * chh + 30;
+      label(ctx, 'Channel after channel, the three matrices become x:', x0, fy - 10, pal.muted, 11.5);
+      for (let c3 = 0; c3 < 3; c3++) for (let k = 0; k < per; k++) {
+        ctx.fillStyle = mix(live.theme === 'dark' ? '#000000' : '#111111', chnCol(c3), CIMG.ch[c3][k] / 255); ctx.fillRect(x0 + k * sw, fy + c3 * (sh + 3), Math.max(1, sw - (sw > 3 ? 0.6 : 0)), sh);
+      }
+      if (hov != null) for (let c3 = 0; c3 < 3; c3++) ring(x0 + hov * sw - 1, fy + c3 * (sh + 3) - 1.5, sw + 2, sh + 3, pal.mark, 1.5);
+      if (sel) ring(x0 - 3, fy - 3, per * sw + 6, 3 * (sh + 3) + 3, pal.mark, 2);
+      label(ctx, 'x_{1}', x0, fy + 3 * (sh + 3) + 13, pal.muted, 11.5);
+      label(ctx, `x_{${3 * per}}`, x0 + per * sw, fy + 3 * (sh + 3) + 13, pal.muted, 11.5, 'right');
+      hits.push((px, py) => { for (let c3 = 0; c3 < 3; c3++) { const X0 = x0 + c3 * (n * q + gap), i = Math.floor((px - X0) / q), j = Math.floor((py - y0) / q); if (i >= 0 && i < n && j >= 0 && j < n) return n * j + i; } return null; });
+      hits.push((px, py) => { const b = Math.floor((px - x0) / cw), a = Math.floor((py - ty) / chh); return a >= 0 && a < 4 && b >= 0 && b < 4 ? ((inTable = true), (wr + a) * n + wc + b) : null; });
+      hits.push((px, py) => (py >= fy && py <= fy + 3 * (sh + 3) && px >= x0 && px < x0 + per * sw ? Math.floor((px - x0) / sw) : null));
+    } else if (kind === 'text') {
+      // Ids, one-hot vectors and embeddings, one row per token in each block.
+      const n = TEXT.tokens.length, nameW = one ? 46 : 54, rowH = Math.min(19, (vecR.h - 140) / (2 * n + 1)), font = Math.max(9.5, Math.min(12, rowH * 0.66)), x0 = vecR.x, xb = x0 + nameW;
+      let y = vecR.y + 14;
+      const head = (s, d) => {
+        label(ctx, s, x0, y, pal.fg, 12.5, 'left', 600);
+        if (one) { y += 16; label(ctx, d, x0, y, hlc('d', pal, pal.muted), 12); } else label(ctx, d, vecR.x + vecR.w, y, hlc('d', pal, pal.muted), 12, 'right');
+        y += 10;
+      };
+      const rowBg = (k, Y) => { if (mark(k)) { ctx.fillStyle = pal.mark; ctx.globalAlpha = 0.14; ctx.fillRect(x0, Y, vecR.w, rowH); ctx.globalAlpha = 1; } };
+      const tok = (k, Y) => label(ctx, TEXT.tokens[k], x0 + 2, Y + rowH * 0.7, mark(k) ? pal.mark : pal.muted, font);
+      const blocks = [];
+      // Ids: one integer per token.
+      head('Token ids', 'd = 6');
+      const iw = (vecR.w) / n, iy = y;
+      TEXT.ids.forEach((id, k) => {
+        const X = x0 + k * iw;
+        if (mark(k)) { ctx.fillStyle = pal.mark; ctx.globalAlpha = 0.14; ctx.fillRect(X + 2, iy, iw - 4, rowH + 4); ctx.globalAlpha = 1; }
+        ctx.strokeStyle = sel ? pal.mark : pal.line; ctx.strokeRect(X + 2.5, iy + 0.5, iw - 5, rowH + 3);
+        label(ctx, String(id), X + iw / 2, iy + rowH * 0.72 + 2, mark(k) ? pal.mark : pal.fg, font, 'center', 600);
+      });
+      blocks.push([iy, iy + rowH + 4, (px) => Math.floor((px - x0) / iw)]);
+      y = iy + rowH + 30;
+      // One-hot: a strip of V entries with a single 1 at entry id + 1.
+      head('One-hot vectors, 0 everywhere except one 1', `d = 6 × ${grp(TEXT.V)} = ${grp(n * TEXT.V)}`);
+      const oy = y, bw = vecR.w - nameW - 100;
+      TEXT.ids.forEach((id, k) => {
+        const Y = oy + k * rowH; rowBg(k, Y); tok(k, Y);
+        ctx.fillStyle = mix(pal.bg, pal.faint, 0.35); ctx.fillRect(xb, Y + rowH * 0.25, bw, rowH * 0.5);
+        const X = xb + bw * (id + 0.5) / TEXT.V;
+        ctx.fillStyle = mark(k) ? pal.mark : pal.acc; ctx.fillRect(X - 1.5, Y + 1, 3, rowH - 2);
+        label(ctx, `1 at entry ${id + 1}`, xb + bw + 8, Y + rowH * 0.7, mark(k) ? pal.mark : pal.muted, font - 0.5);
+      });
+      label(ctx, '1', xb, oy + n * rowH + 12, pal.faint, 10.5); label(ctx, grp(TEXT.V), xb + bw, oy + n * rowH + 12, pal.faint, 10.5, 'right');
+      blocks.push([oy, oy + n * rowH, (px, py) => Math.floor((py - oy) / rowH)]);
+      y = oy + n * rowH + 36;
+      // Embeddings: the first entries as coloured cells, then a count of the rest.
+      head('Embeddings, one row of a learned table per id', `d = 6 × ${TEXT.E} = ${grp(n * TEXT.E)}`);
+      const ey = y, show = one ? 16 : 24, ew = Math.min(14, (vecR.w - nameW - 84) / show);
+      EMB.forEach((e, k) => {
+        const Y = ey + k * rowH; rowBg(k, Y); tok(k, Y);
+        for (let j = 0; j < show; j++) { ctx.fillStyle = embCol(pal, e[j]); ctx.fillRect(xb + j * ew, Y + 2, ew - 1.5, rowH - 4); }
+        label(ctx, `… ${TEXT.E - show} more`, xb + show * ew + 8, Y + rowH * 0.7, pal.faint, font - 0.5);
+      });
+      blocks.push([ey, ey + n * rowH, (px, py) => Math.floor((py - ey) / rowH)]);
+      const k0 = hov ?? 0, e0 = EMB[k0], f3 = (x) => fmt(x, 3);
+      label(ctx, `${TEXT.tokens[k0]} ↦ (${f3(e0[0])}, ${f3(e0[1])}, ${f3(e0[2])}, …, ${f3(e0[TEXT.E - 1])})`, x0, ey + n * rowH + 18, hov == null ? pal.muted : pal.mark, 12);
+      hits.push((px, py) => { for (const [a, b, f] of blocks) if (py >= a && py < b && px >= x0) { const k = f(px, py); return k >= 0 && k < n ? k : null; } return null; });
     } else {
       const cols = o.cols, n = o.groups, rowH = Math.min(22, (vecR.h - 30) / n), cw = Math.min(62, (vecR.w - 90) / cols.length), x0 = vecR.x + 80, y0 = vecR.y + 26;
-      const names = kind === 'molecule' ? MOL.atoms.map((a, k) => `${a[3]}${k + 1}`) : kind === 'protein' ? PROT.res.map((r, k) => `${r} ${k + 1}`) : TEXT.tokens;
+      const names = kind === 'molecule' ? MOL.atoms.map((a, k) => `${a[3]}${k + 1}`) : PROT.res.map((r, k) => `${r} ${k + 1}`);
       cols.forEach((cl, j) => label(ctx, cl, x0 + cw * (j + 0.5), y0 - 8, pal.muted, 11.5, 'center'));
       const font = Math.max(9, Math.min(12.5, rowH * 0.62));
       for (let k = 0; k < n; k++) {
@@ -254,7 +366,7 @@ function objects(viz) {
         if (mark(k)) { ctx.fillStyle = pal.mark; ctx.globalAlpha = 0.16; ctx.fillRect(vecR.x, Y, 80 + cw * cols.length, rowH); ctx.globalAlpha = 1; }
         label(ctx, names[k], vecR.x + 2, Y + rowH * 0.72, mark(k) ? pal.mark : pal.muted, font);
         cols.forEach((_, j) => {
-          const val = v[k * cols.length + j], txt = kind === 'text' ? String(val) : kind === 'molecule' && j >= 3 ? String(val) : fmt(val);
+          const val = v[k * cols.length + j], txt = kind === 'molecule' && j >= 3 ? String(val) : fmt(val);
           label(ctx, txt, x0 + cw * (j + 0.85), Y + rowH * 0.72, mark(k) || sel ? pal.mark : (kind === 'molecule' && j >= 3 && val === 0 ? pal.faint : pal.fg), font, 'right');
         });
       }
@@ -264,15 +376,29 @@ function objects(viz) {
     }
     hit = (px, py) => { for (const f of hits) { const r = f(px, py); if (r != null) return r; } return null; };
     // ---- readout ----
-    const per = kind === 'image' ? 1 : o.cols.length;
-    if (hov == null) ro.innerHTML = `${o.name} · d = <b>${o.d}</b> numbers · move the pointer over the object or the vector`;
-    else {
-      const i0 = hov * per + 1, vals = v.slice(hov * per, hov * per + per).map((x) => (Number.isInteger(x) ? String(x) : fmt(x)));
-      const what = kind === 'image' ? `pixel in row ${Math.floor(hov / 16) + 1}, column ${(hov % 16) + 1}` : kind === 'molecule' ? `atom ${hov + 1} (${MOL.atoms[hov][3]})` : kind === 'protein' ? `residue ${hov + 1} (${PROT.res[hov]})` : `token “${TEXT.tokens[hov]}”`;
-      ro.innerHTML = `${what} · entries <b>x<sub>${i0}</sub>${per > 1 ? ` … x<sub>${i0 + per - 1}</sub>` : ''}</b> = <b>${vals.join(', ')}</b> · d = <b>${o.d}</b>`;
+    if (hov == null) ro.innerHTML = kind === 'text'
+      ? `Language · d = <b>6</b> ids, <b>${grp(6 * TEXT.V)}</b> one-hot entries or <b>${grp(6 * TEXT.E)}</b> embedding entries · move the pointer over a token`
+      : `${o.name} · d = <b>${o.d}</b> numbers · move the pointer over the object or the numbers`;
+    else if (kind === 'image') ro.innerHTML = `pixel in row ${Math.floor(hov / 16) + 1}, column ${(hov % 16) + 1} · entry <b>x<sub>${hov + 1}</sub></b> = <b>${IMG8[hov]}</b> · d = <b>256</b>`;
+    else if (kind === 'colour') {
+      const N = CIMG.n * CIMG.n;
+      ro.innerHTML = `pixel in row ${Math.floor(hov / CIMG.n) + 1}, column ${(hov % CIMG.n) + 1} · ${[0, 1, 2].map((c3) => `${CHN[c3]} = <b>x<sub>${c3 * N + hov + 1}</sub></b> = <b>${CIMG.ch[c3][hov]}</b>`).join(', ')} · d = <b>${3 * N}</b>`;
+    } else if (kind === 'text') {
+      const e = EMB[hov];
+      ro.innerHTML = `token “${TEXT.tokens[hov]}” · id <b>${TEXT.ids[hov]}</b> · one-hot: 1 at entry <b>${TEXT.ids[hov] + 1}</b> of ${grp(TEXT.V)} · embedding (<b>${[0, 1, 2].map((j) => fmt(e[j], 3)).join(', ')}, …, ${fmt(e[TEXT.E - 1], 3)}</b>)`;
+    } else {
+      const per = o.cols.length, i0 = hov * per + 1, vals = v.slice(hov * per, hov * per + per).map((x) => (Number.isInteger(x) ? String(x) : fmt(x)));
+      const what = kind === 'molecule' ? `atom ${hov + 1} (${MOL.atoms[hov][3]})` : `residue ${hov + 1} (${PROT.res[hov]})`;
+      ro.innerHTML = `${what} · entries <b>x<sub>${i0}</sub> … x<sub>${i0 + per - 1}</sub></b> = <b>${vals.join(', ')}</b> · d = <b>${o.d}</b>`;
     }
   }
   return { draw };
+}
+// Top-left corner (row, column) of the 4 x 4 window of the colour image: around the hovered pixel,
+// or on the edge of the sun when nothing is hovered.
+function colourWindow(k) {
+  const n = CIMG.n, cl = (u) => Math.max(0, Math.min(n - 4, u));
+  return k == null ? [2, 5] : [cl(Math.floor(k / n) - 1), cl((k % n) - 1)];
 }
 
 // ---------- Step 2: samples and their histogram ----------
@@ -636,7 +762,7 @@ function preview(viz) {
       res.forEach((r3, k) => frameTri(ctx, pal, r3, chainCol(pal, k / (n - 1)), false, 0.85 - 0.25 * fade));
     });
     // ---- sentence ----
-    B = panel(ctx, pal, rects[3], 'Sentence', 'tokens masked, not blended');
+    B = panel(ctx, pal, rects[3], 'Language', 'tokens masked, not blended');
     const shown = Z.tok.map((u) => u < t);
     {
       // Chips on top; below them a time axis with the reveal time of each token and the current t.
