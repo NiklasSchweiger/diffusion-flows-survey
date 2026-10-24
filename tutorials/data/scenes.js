@@ -430,7 +430,8 @@ function samples(viz) {
 
 // ---------- Step 3: probability as area, and a density above 1 ----------
 function interval(viz) {
-  const c = makeCanvas(16 / 9), ro = readout(), N = 1000;
+  // Two panels side by side, or stacked on narrow screens.
+  const NARROW = 560, c = makeCanvas((w) => (w < NARROW ? 0.62 : 16 / 9), { maxH: 0.7 }), ro = readout(), N = 1000;
   let A = -1, B = 0.8, sg = 0.5;
   viz.append(c.cv, controls(
     slider('a', { min: -4, max: 4, step: 0.05, value: A }, (v) => { A = v; draw(); }),
@@ -439,8 +440,10 @@ function interval(viz) {
   ), ro, note('Left: the exact probability of (a, b) and the fraction of 1000 samples in it. Right: N(0, σ²), whose area is 1 for every σ.'));
   function draw() {
     c.fit();
-    const { ctx, w, h } = c, pal = palette(), split = w * 0.64;
-    const lo = Math.min(A, B), hi = Math.max(A, B), a = axes1(40, split - 20, 54, h - 80);
+    const { ctx, w, h } = c, pal = palette(), nar = w < NARROW, split = nar ? w : w * 0.64, H1 = nar ? Math.round(h * 0.56) : h;
+    const lo = Math.min(A, B), hi = Math.max(A, B), a = axes1(nar ? 44 : 62, split - (nar ? 12 : 20), 54, H1 - 80);
+    // Density axis, so the heights can be compared with the density 1 of the right panel.
+    [0.1, 0.2, 0.3, 0.4].forEach((v) => { ctx.strokeStyle = pal.line; ctx.setLineDash([1, 5]); ctx.beginPath(); ctx.moveTo(a.L, a.Y(v)); ctx.lineTo(a.R, a.Y(v)); ctx.stroke(); ctx.setLineDash([]); label(ctx, v.toFixed(1), a.L - 6, a.Y(v) + 4, pal.muted, 11, 'right'); });
     ctx.beginPath(); ctx.moveTo(a.X(lo), a.bot);
     lin(lo, hi, 200).forEach((x) => ctx.lineTo(a.X(x), a.Y(pdata(x))));
     ctx.lineTo(a.X(hi), a.bot); ctx.closePath();
@@ -449,28 +452,29 @@ function interval(viz) {
     dataCurve(ctx, pal, a);
     baseline(ctx, pal, a);
     const inside = (x) => x > lo && x < hi; inside.color = pal.acc;
-    dots(ctx, pal, a, N, h - 52, 30, pal.muted, inside);
+    dots(ctx, pal, a, N, H1 - 52, 30, pal.muted, inside);
     let cnt = 0; for (let i = 0; i < N; i++) if (inside(SAMPLES[i])) cnt++;
     // Right panel: a Gaussian of adjustable width on its own vertical scale.
-    const b2 = { L: split + 24, R: w - 16, top: 40, bot: h - 80 }, ymax = 4.2;
-    const X2 = (x) => b2.L + (b2.R - b2.L) * (x + 2) / 4, Y2 = (v) => b2.bot - (b2.bot - b2.top) * Math.min(v, ymax) / ymax;
+    const b2 = nar ? { L: 44, R: w - 12, top: H1 + 44, bot: h - 28 } : { L: split + 24, R: w - 16, top: 40, bot: h - 80 }, ymax = 4.2;
+    const X2 = (x) => b2.L + (b2.R - b2.L) * (x + 4) / 8, Y2 = (v) => b2.bot - (b2.bot - b2.top) * Math.min(v, ymax) / ymax;
     ctx.strokeStyle = pal.line; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(b2.L, b2.bot + 0.5); ctx.lineTo(b2.R, b2.bot + 0.5); ctx.moveTo(b2.L - 0.5, b2.top); ctx.lineTo(b2.L - 0.5, b2.bot); ctx.stroke();
     [1, 2, 3, 4].forEach((v) => { ctx.setLineDash(v === 1 ? [4, 4] : [1, 5]); ctx.strokeStyle = v === 1 ? pal.bad : pal.line; ctx.beginPath(); ctx.moveTo(b2.L, Y2(v)); ctx.lineTo(b2.R, Y2(v)); ctx.stroke(); ctx.setLineDash([]); label(ctx, String(v), b2.L - 6, Y2(v) + 4, v === 1 ? pal.bad : pal.muted, 11, 'right'); });
-    ctx.beginPath(); ctx.moveTo(X2(-2), b2.bot);
-    lin(-2, 2, 300).forEach((x) => ctx.lineTo(X2(x), Y2(phi(x, 0, sg))));
-    ctx.lineTo(X2(2), b2.bot); ctx.closePath();
+    ctx.beginPath(); ctx.moveTo(X2(-4), b2.bot);
+    lin(-4, 4, 801).forEach((x) => ctx.lineTo(X2(x), Y2(phi(x, 0, sg))));
+    ctx.lineTo(X2(4), b2.bot); ctx.closePath();
     ctx.fillStyle = pal.acc2; ctx.globalAlpha = 0.22; ctx.fill(); ctx.globalAlpha = 1;
     ctx.strokeStyle = hlc('sigma', pal, pal.acc2); ctx.lineWidth = 2; ctx.stroke();
     const peak = phi(0, 0, sg);
-    label(ctx, `N(0, σ²), area 1`, b2.L, 22, pal.acc2, 13);
+    label(ctx, `N(0, σ²), area 1`, nar ? 12 : b2.L, nar ? H1 + 20 : 22, pal.acc2, 13);
     // Keep the peak label off the dashed line at density 1.
-    const py = peak > ymax ? Y2(ymax) + 18 : Math.abs(Y2(peak) - Y2(1)) < 18 ? Y2(1) + 16 : Y2(peak) - 8;
-    label(ctx, `peak ${peak.toFixed(2)}`, X2(0) + 8, py, peak > 1 ? pal.bad : pal.muted, 12.5);
+    const py = peak > ymax ? Y2(ymax) + 32 : Math.abs(Y2(peak) - Y2(1)) < 18 ? Y2(1) + 16 : Y2(peak) - 8;
+    if (peak > ymax) label(ctx, `peak ${peak.toFixed(2)}, off the scale`, X2(0) - 8, py, pal.bad, 12.5, 'right');
+    else label(ctx, `peak ${peak.toFixed(2)}`, X2(0) + 8, py, peak > 1 ? pal.bad : pal.muted, 12.5);
     label(ctx, 'density 1', b2.R, Y2(1) - 6, pal.bad, 11, 'right');
-    [-2, 0, 2].forEach((t) => label(ctx, String(t).replace('-', '−'), X2(t), b2.bot + 16, pal.muted, 11, 'center'));
-    label(ctx, 'p_{data}, dashed; shaded area = P(a < x < b)', a.L, 22, hlc('pdata', pal, pal.muted), 13);
-    ro.innerHTML = `P(a &lt; x &lt; b) = <b>${probInterval(lo, hi).toFixed(3)}</b> exact · <b>${cnt}</b> of ${N} samples = <b>${(cnt / N).toFixed(3)}</b> · Gaussian with σ = ${sg.toFixed(2)}: peak density <b>${peak.toFixed(2)}</b>`;
+    [-4, -2, 0, 2, 4].forEach((t) => label(ctx, String(t).replace('-', '−'), X2(t), b2.bot + 16, pal.muted, 11, 'center'));
+    label(ctx, 'p_{data}, dashed; shaded area = P(a < x < b)', nar ? 12 : a.L, 22, hlc('pdata', pal, pal.muted), 13);
+    ro.innerHTML = `P(${fmt(lo)} &lt; x &lt; ${fmt(hi)}) = <b>${probInterval(lo, hi).toFixed(3)}</b> exact · <b>${cnt}</b> of ${N} samples = <b>${(cnt / N).toFixed(3)}</b> · peak of N(0, σ²): <b>${peak.toFixed(2)}</b>`;
   }
   return { draw };
 }
