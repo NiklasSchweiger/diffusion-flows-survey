@@ -6,7 +6,8 @@ import { XMIN, XMAX, kde } from '../lib/mix1d.js';
 import {
   MIX1, MIX2, XG, pData, NS, Z0, w1, w1ToGrid, w1Dens, LSNR, grid, SOLVERS, NFE1, solverW1, W1_EXACT,
   RA, reward, rGrid, tilt, bestOfN, klBoN, NS2, betaForKL, meanR, klGrid,
-  p2data, K3, A3, NFE_EVAL3, LIM3, NG3, pullback3, search3, tail2,
+  p2data, K3, REW3, W3, NFE_EVAL3, LIM3, NG3, pullback3, search3, TRS3, tail2,
+  ZG, NFE_ITG, KOC, dflowG, ocflowG, path2,
   posterior4, NP4, K4, sample4, score4,
   K5, RUNS5, runBoN, runSMC, runGuided, NS5, BETAS5,
   SPUR, spur, goldBoNSystematic, RUNS6, goldBoNNoise,
@@ -163,57 +164,125 @@ function bestofnScene(viz) {
 
 // ---------- Step 3: searching the noise ----------
 const NN3 = [5, 10, 20, 40, 80, 160], RHO3 = [0.1, 0.2, 0.4, 0.8];
-const search = memo((kind, n, rho) => {
-  const S = search3(kind, n, rho), chain = [S.pts[0]];
+const REWN3 = [['far', 'Reward beyond the data'], ['rare', 'Rare reward in the data']];
+const search = memo((kind, n, rho, rk) => {
+  const S = search3(kind, n, rho, 5, rk), chain = [S.pts[0]];
   S.pts.forEach((p) => { if (p.r > chain[chain.length - 1].r) chain.push(p); });
   return { ...S, chain };
 });
+// Reward toggle shared by steps 3 and 4.
+function rewardButtons(get, set) {
+  const bs = REWN3.map(([k, n]) => button(n, () => { set(k); sync(); }));
+  const sync = () => bs.forEach((b, i) => b.classList.toggle('on', REWN3[i][0] === get()));
+  sync(); return bs;
+}
+// The noise plane shaded by the reward of the end point, with circles at |x_0| = √2 and 3.
+function noisePlane(ctx, pal, P, rk, title) {
+  const ax = sqAxes(ctx, pal, P, title, LIM3), PB = pullback3(rk);
+  let lo = Infinity, hi = -Infinity; PB.r.forEach((v) => { lo = Math.min(lo, v); hi = Math.max(hi, v); });
+  const cs = ax.s / NG3, pw = rk === 'far' ? 3 : 0.5;
+  ctx.fillStyle = hlc('r', pal, pal.acc2);
+  // Cell edges rounded to whole pixels, so that neighbouring cells neither overlap nor leave seams.
+  const e = (k) => Math.round(k * cs);
+  for (let j = 0; j < NG3; j++) for (let i = 0; i < NG3; i++) {
+    ctx.globalAlpha = 0.04 + 0.5 * ((PB.r[j * NG3 + i] - lo) / (hi - lo)) ** pw;
+    const y0 = e(NG3 - 1 - j); ctx.fillRect(Math.round(ax.L) + e(i), Math.round(ax.T) + y0, e(i + 1) - e(i), e(NG3 - j) - y0);
+  }
+  ctx.globalAlpha = 1;
+  circle(ctx, ax, Math.SQRT2, hlc('z', pal, pal.fg)); circle(ctx, ax, 3, pal.muted, [2, 4]);
+  label(ctx, '|x_0| = √2', ax.X(0) + 4, ax.Y(Math.SQRT2) - 4, hlc('z', pal, pal.fg), 11);
+  label(ctx, '|x_0| = 3', ax.X(0) + 4, ax.Y(3) - 4, pal.muted, 11);
+  return ax;
+}
+// The reward in data space: a cross at a, or the circle r = 1/2 around b.
+function rewardMark(ctx, pal, ax, rk) {
+  const ac = hlc('r', pal, pal.acc2), [px, py] = REW3[rk].at; ctx.strokeStyle = ac; ctx.lineWidth = 2;
+  if (rk === 'far') {
+    ctx.beginPath(); ctx.moveTo(ax.X(px) - 6, ax.Y(py) - 6); ctx.lineTo(ax.X(px) + 6, ax.Y(py) + 6); ctx.moveTo(ax.X(px) - 6, ax.Y(py) + 6); ctx.lineTo(ax.X(px) + 6, ax.Y(py) - 6); ctx.stroke();
+    label(ctx, 'a', ax.X(px) + 8, ax.Y(py) - 6, ac, 12);
+  } else {
+    ctx.beginPath(); ctx.arc(ax.X(px), ax.Y(py), ax.X(1.1774 * W3) - ax.X(0), 0, 7); ctx.stroke();
+    label(ctx, 'b', ax.X(px) + 12, ax.Y(py) - 8, ac, 12);
+  }
+}
+const bigDot = (ctx, pal, X, Y, col) => { dot(ctx, X, Y, 6, pal.fg); dot(ctx, X, Y, 4.5, col); };
 function searchScene(viz) {
   const c = makeCanvas(aspect(2), { maxH: 0.78 }), ro = readout();
-  let n = 40, rho = 0.4;
-  viz.append(c.cv, controls(listSlider('n', NN3, n, (v) => { n = v; draw(); }, (v) => `${v} (${v * NFE_EVAL3} NFE)`), listSlider('rho', RHO3, rho, (v) => { rho = v; draw(); })), ro,
-    note(`Exact field of the 2D mixture; each evaluation solves the ODE with RK4 in ${K3} steps (${NFE_EVAL3} NFE). The shading is the reward of the end point on a ${NG3} × ${NG3} grid of noises. Both searches start from the same seeded noise; local search proposes a Gaussian step of size ρ from its best point and keeps it when the reward rises.`));
+  let n = 40, rho = 0.4, rk = 'far';
+  viz.append(c.cv, controls(...rewardButtons(() => rk, (v) => { rk = v; draw(); })), controls(listSlider('n', NN3, n, (v) => { n = v; draw(); }, (v) => `${v} (${v * NFE_EVAL3} NFE)`), listSlider('rho', RHO3, rho, (v) => { rho = v; draw(); })), ro,
+    note(`Exact field of the 2D mixture; each evaluation solves the ODE with RK4 in ${K3} steps (${NFE_EVAL3} NFE). The shading is the reward of the end point on a ${NG3} × ${NG3} grid of noises. All three searches use the same seed, so their first noise is the same. Trust-region search spends ${TRS3.warm * 100}% of the budget on random draws, then keeps ${TRS3.k} boxes around the ${TRS3.k} best noises; the squares are the boxes after the last round. The searches are single seeded runs, so other seeds give other numbers.`));
   function draw() {
     c.fit();
-    const { ctx, w, h } = c, pal = palette(), [P1, P2] = panels(w, h, 2), PB = pullback3();
-    const R = search('random' + n, 'random', n, rho), Lc = search('local' + n + ':' + rho, 'local', n, rho);
-    const cR = pal.ramp[0], cL = pal.ramp[3];
-    const ax = sqAxes(ctx, pal, P1, 'Noise x_0, shaded by the reward of X_{0→1}(x_0)', LIM3);
-    let lo = Infinity, hi = -Infinity; PB.r.forEach((v) => { lo = Math.min(lo, v); hi = Math.max(hi, v); });
-    const cs = ax.s / NG3;
-    ctx.fillStyle = hlc('r', pal, pal.acc2);
-    for (let j = 0; j < NG3; j++) for (let i = 0; i < NG3; i++) {
-      ctx.globalAlpha = 0.04 + 0.5 * ((PB.r[j * NG3 + i] - lo) / (hi - lo)) ** 3;
-      ctx.fillRect(ax.L + i * cs, ax.T + (NG3 - 1 - j) * cs, cs + 0.6, cs + 0.6);
-    }
-    ctx.globalAlpha = 1;
-    circle(ctx, ax, Math.SQRT2, hlc('z', pal, pal.fg)); circle(ctx, ax, 3, pal.muted, [2, 4]);
-    label(ctx, '|x_0| = √2', ax.X(0) + 4, ax.Y(Math.SQRT2) - 4, hlc('z', pal, pal.fg), 11);
-    label(ctx, '|x_0| = 3', ax.X(0) + 4, ax.Y(3) - 4, pal.muted, 11);
+    const { ctx, w, h } = c, pal = palette(), [P1, P2] = panels(w, h, 2);
+    const R = search('random' + n + rk, 'random', n, rho, rk), Lc = search('local' + n + ':' + rho + rk, 'local', n, rho, rk), T = search('trs' + n + rk, 'trs', n, rho, rk);
+    const cR = pal.ramp[0], cL = pal.ramp[3], cT = pal.ramp[1];
+    const ax = noisePlane(ctx, pal, P1, rk, 'Noise x_0, shaded by the reward of X_{0→1}(x_0)');
     clip(ctx, ax.L, ax.T, ax.s, ax.s);
     R.pts.forEach((p) => dot(ctx, ax.X(p.z[0]), ax.Y(p.z[1]), 2.4, cR));
+    T.pts.forEach((p) => dot(ctx, ax.X(p.z[0]), ax.Y(p.z[1]), 1.8, cT));
     Lc.pts.forEach((p) => dot(ctx, ax.X(p.z[0]), ax.Y(p.z[1]), 1.8, cL));
     polyline(ctx, Lc.chain.map((p) => ax.X(p.z[0])), Lc.chain.map((p) => ax.Y(p.z[1])), cL, 1.6);
-    [[R.best, cR], [Lc.best, cL]].forEach(([b, col]) => { dot(ctx, ax.X(b.z[0]), ax.Y(b.z[1]), 6, pal.fg); dot(ctx, ax.X(b.z[0]), ax.Y(b.z[1]), 4.5, col); });
+    ctx.strokeStyle = cT; ctx.lineWidth = 2;
+    (T.boxes ?? []).forEach(({ c: [bx, by], l }) => { const s = ax.X(l / 2) - ax.X(0); ctx.strokeRect(ax.X(bx) - s, ax.Y(by) - s, 2 * s, 2 * s); });
+    [[R.best, cR], [T.best, cT], [Lc.best, cL]].forEach(([b, col]) => bigDot(ctx, pal, ax.X(b.z[0]), ax.Y(b.z[1]), col));
     ctx.restore();
-    legend(ctx, ax, [['random search', cR], ['local search', cL]], true, true);
+    legend(ctx, ax, [['random search', cR], ['trust-region search', cT], ['local search', cL]], true, true);
     const ax2 = sqAxes(ctx, pal, P2, 'End points X_{0→1}(x_0) in data space', 3.5);
-    dataBlobs(ctx, ax2, hlc('pd', pal, pal.muted));
+    dataBlobs(ctx, ax2, pal, hlc('pd', pal, pal.muted));
     clip(ctx, ax2.L, ax2.T, ax2.s, ax2.s);
     R.pts.forEach((p) => dot(ctx, ax2.X(p.x[0]), ax2.Y(p.x[1]), 2.4, cR));
+    T.pts.forEach((p) => dot(ctx, ax2.X(p.x[0]), ax2.Y(p.x[1]), 1.8, cT));
     Lc.pts.forEach((p) => dot(ctx, ax2.X(p.x[0]), ax2.Y(p.x[1]), 1.8, cL));
-    [[R.best, cR], [Lc.best, cL]].forEach(([b, col]) => { dot(ctx, ax2.X(b.x[0]), ax2.Y(b.x[1]), 6, pal.fg); dot(ctx, ax2.X(b.x[0]), ax2.Y(b.x[1]), 4.5, col); });
+    [[R.best, cR], [T.best, cT], [Lc.best, cL]].forEach(([b, col]) => bigDot(ctx, pal, ax2.X(b.x[0]), ax2.Y(b.x[1]), col));
     ctx.restore();
-    const ac = hlc('r', pal, pal.acc2); ctx.strokeStyle = ac; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(ax2.X(A3[0]) - 6, ax2.Y(A3[1]) - 6); ctx.lineTo(ax2.X(A3[0]) + 6, ax2.Y(A3[1]) + 6); ctx.moveTo(ax2.X(A3[0]) - 6, ax2.Y(A3[1]) + 6); ctx.lineTo(ax2.X(A3[0]) + 6, ax2.Y(A3[1]) - 6); ctx.stroke();
-    label(ctx, 'a', ax2.X(A3[0]) + 8, ax2.Y(A3[1]) - 6, ac, 12);
-    const row = (name, S) => { const b = S.best, nz = Math.hypot(b.z[0], b.z[1]); return `${name}: best r <b>${f3(b.r)}</b>, |x<sub>0</sub>| = <b>${f2(nz)}</b>, P(|Z| > |x<sub>0</sub>|) = <b>${tail2(b.z).toExponential(1)}</b>, p<sub>data</sub> at the end point <b>${p2data(b.x[0], b.x[1]).toExponential(1)}</b>`; };
-    ro.innerHTML = `n = <b>${n}</b> evaluations, <b>${n * NFE_EVAL3}</b> NFE<br>${row('random search', R)}<br>${row(`local search, ρ = ${rho}`, Lc)}`;
+    rewardMark(ctx, pal, ax2, rk);
+    const row = (name, S) => { const b = S.best, nz = Math.hypot(b.z[0], b.z[1]); return `${name}: best r <b>${fr(b.r)}</b>, |x<sub>0</sub>| = <b>${f2(nz)}</b>, P(|Z| > |x<sub>0</sub>|) = <b>${tail2(b.z).toExponential(1)}</b>, p<sub>data</sub> at the end point <b>${p2data(b.x[0], b.x[1]).toExponential(1)}</b>`; };
+    ro.innerHTML = `n = <b>${n}</b> evaluations, <b>${n * NFE_EVAL3}</b> NFE<br>${row('random search', R)}<br>${row('trust-region search', T)}<br>${row(`local search, ρ = ${rho}`, Lc)}`;
+  }
+  return { draw };
+}
+// Rewards span many orders of magnitude on the rare bump.
+const fr = (v) => (v !== 0 && Math.abs(v) < 1e-3 ? v.toExponential(1) : f3(v));
+
+// ---------- Step 4: optimizing through the flow ----------
+const IT4 = [0, 5, 10, 20, 40, 80], BETA4 = [0, 0.1, 0.3, 1];
+const grad4 = memo((it, beta, rk) => ({ D: dflowG(it, beta, rk), O: ocflowG(it, beta, rk) }));
+const free4 = memo(() => path2(ZG));
+function flowgradScene(viz) {
+  const c = makeCanvas(aspect(2), { maxH: 0.78 }), ro = readout();
+  let it = 20, beta = 0, rk = 'far';
+  viz.append(c.cv, controls(...rewardButtons(() => rk, (v) => { rk = v; draw(); })), controls(listSlider('it', IT4, it, (v) => { it = v; draw(); }, (v) => `${v} (${v * NFE_ITG} NFE)`), listSlider('beta', BETA4, beta, (v) => { beta = v; draw(); })), ro,
+    note(`Exact field and its exact Jacobian. Both methods start from the first noise of step 3. D-Flow differentiates the RK4 solve of ${NFE_EVAL3} NFE and takes gradient steps of size 0.1 on the noise. OC-Flow uses Euler with ${KOC} steps and one control per step, updated with step size 0.5 from the costate of a backward pass. An iteration of either is counted as ${NFE_ITG} NFE: one forward solve and one backward pass of about the same cost.`));
+  function draw() {
+    c.fit();
+    const { ctx, w, h } = c, pal = palette(), [P1, P2] = panels(w, h, 2), { D, O } = grad4(`${it}:${beta}:${rk}`, it, beta, rk), F = free4('f');
+    const cD = pal.ramp[0], cO = pal.ramp[2];
+    const ax = noisePlane(ctx, pal, P1, rk, 'Noise x_0: the iterates of D-Flow');
+    clip(ctx, ax.L, ax.T, ax.s, ax.s);
+    polyline(ctx, D.zs.map((q) => ax.X(q[0])), D.zs.map((q) => ax.Y(q[1])), cD, 1.6);
+    D.zs.forEach((q) => dot(ctx, ax.X(q[0]), ax.Y(q[1]), 2, cD));
+    dot(ctx, ax.X(ZG[0]), ax.Y(ZG[1]), 4.5, pal.fg); bigDot(ctx, pal, ax.X(D.z[0]), ax.Y(D.z[1]), cD);
+    ctx.restore();
+    legend(ctx, ax, [['start x_0', pal.fg], ['D-Flow iterates', cD]], true, true);
+    const ax2 = sqAxes(ctx, pal, P2, 'Paths in data space', 3.5);
+    dataBlobs(ctx, ax2, pal, hlc('pd', pal, pal.muted));
+    clip(ctx, ax2.L, ax2.T, ax2.s, ax2.s);
+    const pl = (xs, col, lw, dash) => polyline(ctx, xs.map((q) => ax2.X(q[0])), xs.map((q) => ax2.Y(q[1])), col, lw, dash);
+    pl(F, pal.muted, 1.6, [4, 4]); pl(D.xs, cD, 2); pl(O.xs, hlc('th', pal, cO), 2);
+    dot(ctx, ax2.X(ZG[0]), ax2.Y(ZG[1]), 4.5, pal.fg);
+    bigDot(ctx, pal, ax2.X(D.x[0]), ax2.Y(D.x[1]), cD); bigDot(ctx, pal, ax2.X(O.x[0]), ax2.Y(O.x[1]), hlc('th', pal, cO));
+    ctx.restore();
+    rewardMark(ctx, pal, ax2, rk);
+    legend(ctx, ax2, [['without optimization', pal.muted, [4, 4]], ['D-Flow, from its last noise', cD], ['OC-Flow, from the start', hlc('th', pal, cO)]], true, true);
+    const nz = Math.hypot(D.z[0], D.z[1]);
+    ro.innerHTML = `<b>${it}</b> iterations, <b>${it * NFE_ITG}</b> NFE, β = <b>${beta}</b><br>` +
+      `D-Flow: r <b>${fr(D.r)}</b>, |x<sub>0</sub>| = <b>${f2(nz)}</b>, P(|Z| > |x<sub>0</sub>|) = <b>${tail2(D.z).toExponential(1)}</b>, p<sub>data</sub> at the end point <b>${D.p.toExponential(1)}</b><br>` +
+      `OC-Flow: r <b>${fr(O.r)}</b>, control energy <b>${O.E < 1e-3 ? O.E.toExponential(1) : f3(O.E)}</b>, p<sub>data</sub> at the end point <b>${O.p.toExponential(1)}</b>`;
   }
   return { draw };
 }
 
-// ---------- Step 4: inverse problems ----------
+// ---------- Step 5: inverse problems ----------
 const YS4 = [-1.2, -0.6, 0, 0.4, 0.8, 1.4], SY4 = [0.1, 0.3, 0.5, 1], ZE4 = [0.5, 1, 2, 4];
 const METH4 = [['exact', 'exact posterior field'], ['pigdm', 'ΠGDM'], ['dps', 'DPS']];
 const col4 = (pal, k) => ({ exact: pal.ok, pigdm: pal.ramp[1], dps: pal.ramp[3] }[k]);
@@ -231,7 +300,7 @@ function dpsScene(viz) {
     const { ctx, w, h } = c, pal = palette(), [P1, P2] = panels(w, h, 2), P = posterior4(y, sy);
     const all = Object.fromEntries(METH4.map(([k]) => [k, run4(`${k}:${y}:${sy}:${k === 'dps' ? ze : 1}`, k, y, sy, k === 'dps' ? ze : 1)]));
     const ax = sqAxes(ctx, pal, P1, `Samples of ${METH4.find((m) => m[0] === show)[1]}, y = ${y}`, 3.5);
-    dataBlobs(ctx, ax, hlc('pd', pal, pal.muted));
+    dataBlobs(ctx, ax, pal, hlc('pd', pal, pal.muted));
     clip(ctx, ax.L, ax.T, ax.s, ax.s);
     ctx.fillStyle = hlc(['y', 'sy'], pal, pal.acc2); ctx.globalAlpha = 0.14;
     ctx.fillRect(ax.X(y - sy), ax.T, ax.X(y + sy) - ax.X(y - sy), ax.s); ctx.globalAlpha = 1;
@@ -253,7 +322,7 @@ function dpsScene(viz) {
   return { draw };
 }
 
-// ---------- Step 5: SMC against best-of-N at equal compute ----------
+// ---------- Step 6: SMC against best-of-N at equal compute ----------
 // Results fill in progressively: one chunk of seeded runs per animation frame.
 const CH5 = 50, bon5 = new Map(), smc5 = new Map(), guided5 = new Map();
 const key5 = (beta, N) => `${beta}:${N}`;
@@ -319,7 +388,7 @@ function smcScene(viz) {
   return { draw, active: (on) => r.setActive(on) };
 }
 
-// ---------- Step 6: scaling against an imperfect verifier ----------
+// ---------- Step 7: scaling against an imperfect verifier ----------
 const NS6 = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024], SIG6 = [0.1, 0.3, 1], B6 = [0, 0.5, 1, 1.2, 1.5, 2];
 const sys6 = memo((b) => goldBoNSystematic(b, NS6)), noise6 = memo((s) => goldBoNNoise(s, NS6));
 function verifierScene(viz) {
@@ -351,4 +420,4 @@ function verifierScene(viz) {
   return { draw };
 }
 
-export const SCENES = { solvers: solversScene, bestofn: bestofnScene, search: searchScene, dps: dpsScene, smc: smcScene, verifier: verifierScene };
+export const SCENES = { solvers: solversScene, bestofn: bestofnScene, search: searchScene, flowgrad: flowgradScene, dps: dpsScene, smc: smcScene, verifier: verifierScene };

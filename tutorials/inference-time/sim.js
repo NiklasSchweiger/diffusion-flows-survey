@@ -1,7 +1,7 @@
-// Numerics of the §6 tutorial. The base model is the exact field of the 1D mixture MIX1 (steps 1, 2, 5
-// and 6) or of the 2D mixture MIX2 (steps 3 and 4) on the linear path x_t = t x_1 + (1 - t) x_0. Compute
-// is counted in evaluations of the field (NFE). Steps 1, 2 and the systematic verifier of step 6 are
-// exact; search, SMC and the noisy verifier are Monte Carlo over seeded runs. No DOM access.
+// Numerics of the §6 tutorial. The base model is the exact field of the 1D mixture MIX1 (steps 1, 2, 6
+// and 7) or of the 2D mixture MIX2 (steps 3 to 5) on the linear path x_t = t x_1 + (1 - t) x_0. Compute
+// is counted in evaluations of the field (NFE). Steps 1, 2 and 4 and the systematic verifier of step 7
+// are exact; search, SMC and the noisy verifier are Monte Carlo over seeded runs. No DOM access.
 import { MIX1, XG, DX, NG, fields, cdf, strat, densGrid, w1Samples, normalize, klGrid, meanGrid } from '../lib/mix1d.js';
 import { makeRng } from '../../animations/lib/rng.js';
 import { MIX2 } from '../score-matching/sim.js';
@@ -124,28 +124,38 @@ export function flow2(x, y, K = K3) {
 }
 
 // ---------- Step 3: searching the noise ----------
-// The reward pulls towards a point beyond the data, r(x) = -|x - a|² / 2.
-export const A3 = [2.4, 1.5];
-export const reward2 = ([x, y]) => -0.5 * ((x - A3[0]) ** 2 + (y - A3[1]) ** 2);
+// Two rewards. 'far' pulls towards a point a beyond the data, r(x) = -|x - a|² / 2. 'rare' is a narrow
+// bump of width 0.15 at b, on the edge of the right mode, where about one data sample in 590 has r > 0.5.
+export const A3 = [2.4, 1.5], B3 = [2.3, -0.3], W3 = 0.15;
+export const REW3 = {
+  far: { f: ([x, y]) => -0.5 * ((x - A3[0]) ** 2 + (y - A3[1]) ** 2), grad: ([x, y]) => [A3[0] - x, A3[1] - y], at: A3 },
+  rare: {
+    f: ([x, y]) => Math.exp(-((x - B3[0]) ** 2 + (y - B3[1]) ** 2) / (2 * W3 * W3)),
+    grad: (p) => { const r = REW3.rare.f(p); return [(r * (B3[0] - p[0])) / (W3 * W3), (r * (B3[1] - p[1])) / (W3 * W3)]; },
+    at: B3,
+  },
+};
+export const reward2 = REW3.far.f;
 export const NFE_EVAL3 = 4 * K3;
 export const LIM3 = 4.5, NG3 = 64;
-let pull3 = null;
+const pull3 = {};
 // The reward pulled back to the noise plane, on a grid over [-LIM3, LIM3]².
-export function pullback3() {
-  if (pull3) return pull3;
-  const r = new Float64Array(NG3 * NG3), img = new Float64Array(2 * NG3 * NG3);
+export function pullback3(rk = 'far') {
+  if (pull3[rk]) return pull3[rk];
+  const r = new Float64Array(NG3 * NG3), f = REW3[rk].f;
   for (let j = 0; j < NG3; j++) for (let i = 0; i < NG3; i++) {
-    const x = -LIM3 + (2 * LIM3) * (i + 0.5) / NG3, y = -LIM3 + (2 * LIM3) * (j + 0.5) / NG3, e = flow2(x, y);
-    r[j * NG3 + i] = reward2(e); img[2 * (j * NG3 + i)] = e[0]; img[2 * (j * NG3 + i) + 1] = e[1];
+    const x = -LIM3 + (2 * LIM3) * (i + 0.5) / NG3, y = -LIM3 + (2 * LIM3) * (j + 0.5) / NG3;
+    r[j * NG3 + i] = f(flow2(x, y));
   }
-  return (pull3 = { r, img });
+  return (pull3[rk] = { r });
 }
 // Random search: n seeded draws of the noise. Local search: from the first draw, Gaussian proposals of
 // size rho, kept when they raise the reward. Both return the visited points in order.
-export function search3(kind, n, rho = 0.4, seed = 5) {
-  const rng = makeRng(seed), pts = [];
+export function search3(kind, n, rho = 0.4, seed = 5, rk = 'far') {
+  if (kind === 'trs') return trs3(n, seed, rk);
+  const rng = makeRng(seed), pts = [], f = REW3[rk].f;
   let best = null;
-  const visit = (z) => { const x = flow2(z[0], z[1]), r = reward2(x), p = { z, x, r }; pts.push(p); if (!best || r > best.r) best = p; return p; };
+  const visit = (z) => { const x = flow2(z[0], z[1]), r = f(x), p = { z, x, r }; pts.push(p); if (!best || r > best.r) best = p; return p; };
   let cur = visit([rng.gauss(), rng.gauss()]);
   for (let i = 1; i < n; i++) {
     if (kind === 'random') visit([rng.gauss(), rng.gauss()]);
@@ -153,10 +163,110 @@ export function search3(kind, n, rho = 0.4, seed = 5) {
   }
   return { pts, best };
 }
+// Trust-region search (as in animation A13): a random warm-up on 20% of the budget, then k boxes centred
+// on the k best noises so far. Each box proposes masked uniform steps inside it, grows by alpha after cs
+// rounds with an improvement, shrinks after cf rounds without, and restarts at l0 when it fails at lmin.
+export const TRS3 = { k: 3, per: 2, warm: 0.2, l0: 0.8, lmin: 0.05, lmax: 2.4, alpha: 1.5, cs: 3, cf: 3, pmin: 0.1, pmax: 0.9 };
+function trs3(n, seed, rk) {
+  const P = TRS3, rng = makeRng(seed), pts = [], f = REW3[rk].f;
+  const visit = (z) => { const x = flow2(z[0], z[1]), p = { z, x, r: f(x) }; pts.push(p); return p; };
+  const nw = Math.min(n, Math.max(P.k, Math.round(P.warm * n)));
+  for (let i = 0; i < nw; i++) visit([rng.gauss(), rng.gauss()]);
+  const reg = Array.from({ length: P.k }, () => ({ l: P.l0, s: 0, f: 0, c: null }));
+  while (pts.length < n) {
+    const top = [...pts].sort((a, b) => b.r - a.r).slice(0, P.k);
+    for (let j = 0; j < P.k; j++) {
+      const R = reg[j], ctr = top[j % top.length]; let imp = false; R.c = ctr.z;
+      for (let b = 0; b < P.per && pts.length < n; b++) {
+        let m; do { const q = P.pmin + (P.pmax - P.pmin) * rng.uniform(); m = [rng.uniform() < q, rng.uniform() < q]; } while (!m[0] && !m[1]);
+        const p = visit(ctr.z.map((v, d) => v + (m[d] ? (rng.uniform() - 0.5) * R.l : 0))); if (p.r > ctr.r) imp = true;
+      }
+      if (imp) { R.s++; R.f = 0; } else { R.f++; R.s = 0; }
+      if (R.s >= P.cs) { R.l = Math.min(R.l * P.alpha, P.lmax); R.s = 0; }
+      if (R.f >= P.cf) { R.l = R.l <= P.lmin + 1e-9 ? P.l0 : Math.max(R.l / P.alpha, P.lmin); R.f = 0; }
+    }
+  }
+  const best = pts.reduce((a, b) => (b.r > a.r ? b : a));
+  return { pts, best, boxes: reg.filter((R) => R.c).map((R) => ({ c: R.c, l: R.l })), warm: nw };
+}
 // Probability that a standard 2D Gaussian has a larger norm than z.
 export const tail2 = (z) => Math.exp(-(z[0] ** 2 + z[1] ** 2) / 2);
 
-// ---------- Step 4: inverse problems ----------
+// ---------- Step 4: optimizing through the flow ----------
+// The velocity of MIX2 and its Jacobian, grad u = c I + t (1 - c t) / v Cov_q(m), with q the posterior
+// weights of the components and m their means.
+function uJ(x, y, t) {
+  const v = t * t * S2 + (1 - t) ** 2, c = (t * S2 - (1 - t)) / v;
+  const lw = MU2.map(([mx, my], k) => Math.log(WT2[k]) - ((x - t * mx) ** 2 + (y - t * my) ** 2) / (2 * v));
+  const m = Math.max(...lw), e = lw.map((l) => Math.exp(l - m)), Z = e.reduce((a, b) => a + b, 0), q = e.map((a) => a / Z);
+  let mbx = 0, mby = 0, ux = 0, uy = 0, cxx = 0, cxy = 0, cyy = 0;
+  MU2.forEach(([mx, my], k) => { mbx += q[k] * mx; mby += q[k] * my; ux += q[k] * (mx + c * (x - t * mx)); uy += q[k] * (my + c * (y - t * my)); });
+  MU2.forEach(([mx, my], k) => { const a = mx - mbx, b = my - mby; cxx += q[k] * a * a; cxy += q[k] * a * b; cyy += q[k] * b * b; });
+  const s = (t * (1 - c * t)) / v;
+  return { ux, uy, J: [c + s * cxx, s * cxy, s * cxy, c + s * cyy] };
+}
+const mm = (A, B) => [A[0] * B[0] + A[1] * B[2], A[0] * B[1] + A[1] * B[3], A[2] * B[0] + A[3] * B[2], A[2] * B[1] + A[3] * B[3]];
+const madd = (A, B, s) => A.map((a, i) => a + s * B[i]);
+// RK4 flow map and its 2 × 2 Jacobian dX/dx_0, carried along the solve (the tangent equation dP = J P dt).
+function flowJ([x, y], K = K3) {
+  const h = 1 / K; let P = [1, 0, 0, 1];
+  for (let i = 0; i < K; i++) {
+    const t = i * h, a = uJ(x, y, t), Pa = mm(a.J, P);
+    const b = uJ(x + (h / 2) * a.ux, y + (h / 2) * a.uy, t + h / 2), Pb = mm(b.J, madd(P, Pa, h / 2));
+    const c = uJ(x + (h / 2) * b.ux, y + (h / 2) * b.uy, t + h / 2), Pc = mm(c.J, madd(P, Pb, h / 2));
+    const d = uJ(x + h * c.ux, y + h * c.uy, t + h), Pd = mm(d.J, madd(P, Pc, h));
+    x += (h / 6) * (a.ux + 2 * b.ux + 2 * c.ux + d.ux); y += (h / 6) * (a.uy + 2 * b.uy + 2 * c.uy + d.uy);
+    P = P.map((p, k) => p + (h / 6) * (Pa[k] + 2 * Pb[k] + 2 * Pc[k] + Pd[k]));
+  }
+  return { x: [x, y], P };
+}
+// The RK4 path from a noise, K + 1 points.
+export function path2([x, y], K = K3) {
+  const h = 1 / K, out = [[x, y]];
+  for (let i = 0; i < K; i++) {
+    const t = i * h, a = f2(x, y, t), b = f2(x + 0.5 * h * a.ux, y + 0.5 * h * a.uy, t + 0.5 * h);
+    const c = f2(x + 0.5 * h * b.ux, y + 0.5 * h * b.uy, t + 0.5 * h), d = f2(x + h * c.ux, y + h * c.uy, t + h);
+    x += (h / 6) * (a.ux + 2 * b.ux + 2 * c.ux + d.ux); y += (h / 6) * (a.uy + 2 * b.uy + 2 * c.uy + d.uy); out.push([x, y]);
+  }
+  return out;
+}
+// Both methods start from the first noise of the searches of step 3. One iteration costs a forward solve
+// and a backward pass, counted as 2 × 40 NFE (a vector-Jacobian product costs about one evaluation).
+export const ZG = (() => { const r = makeRng(5); return [r.gauss(), r.gauss()]; })();
+export const NFE_ITG = 2 * NFE_EVAL3, KOC = 40;
+// D-Flow: gradient ascent on the noise for r(X(z)) - beta |z|² / 2, with a fixed step eta.
+export function dflowG(iters, beta, rk = 'far', eta = 0.1) {
+  const R = REW3[rk]; let z = ZG.slice(); const zs = [z];
+  for (let i = 0; i < iters; i++) {
+    const { x, P } = flowJ(z), g = R.grad(x);
+    z = [z[0] + eta * (P[0] * g[0] + P[2] * g[1] - beta * z[0]), z[1] + eta * (P[1] * g[0] + P[3] * g[1] - beta * z[1])]; zs.push(z);
+  }
+  const xs = path2(z), x = xs[xs.length - 1];
+  return { z, zs, xs, x, r: R.f(x), p: p2data(x[0], x[1]) };
+}
+// OC-Flow: Euler with KOC steps and a control theta_k added to the velocity at each step, maximizing
+// r(x_1) - beta/2 sum_k h |theta_k|². The costate mu runs backward from grad r(x_1) through
+// mu_k = (I + h grad u_k)^T mu_{k+1}, and each control moves along mu_{k+1} - beta theta_k.
+export function ocflowG(iters, beta, rk = 'far', eta = 0.5) {
+  const R = REW3[rk], K = KOC, h = 1 / K, th = Array.from({ length: K }, () => [0, 0]);
+  let res, free;
+  for (let it = 0; it <= iters; it++) {
+    const xs = [ZG.slice()], Js = [];
+    for (let k = 0; k < K; k++) { const [x, y] = xs[k], a = uJ(x, y, k * h); Js.push(a.J); xs.push([x + h * (a.ux + th[k][0]), y + h * (a.uy + th[k][1])]); }
+    const x = xs[K];
+    res = { xs, x, r: R.f(x), p: p2data(x[0], x[1]), E: th.reduce((s, q) => s + 0.5 * h * (q[0] ** 2 + q[1] ** 2), 0) };
+    if (!it) free = xs;
+    if (it === iters) break;
+    let mu = R.grad(x);
+    for (let k = K - 1; k >= 0; k--) {
+      const J = Js[k], prev = [mu[0] + h * (J[0] * mu[0] + J[2] * mu[1]), mu[1] + h * (J[1] * mu[0] + J[3] * mu[1])];
+      th[k] = [th[k][0] + eta * (mu[0] - beta * th[k][0]), th[k][1] + eta * (mu[1] - beta * th[k][1])]; mu = prev;
+    }
+  }
+  return { ...res, free };
+}
+
+// ---------- Step 5: inverse problems ----------
 // y = x^(1) + N(0, sy²). The exact posterior is a mixture with diagonal components.
 export function posterior4(y, sy) {
   const v = S2 + sy * sy, lw = MU2.map(([mx], k) => Math.log(WT2[k]) - ((y - mx) ** 2) / (2 * v));
@@ -226,7 +336,7 @@ export function score4(S, y, sy) {
   return { w1x: w1Cdf(S.map((p) => p[0]), Fx), w1y: w1Cdf(S.map((p) => p[1]), Fy), shares: sh.map((c) => c / S.length), post: P };
 }
 
-// ---------- Step 5: SMC against best-of-N at equal compute ----------
+// ---------- Step 6: SMC against best-of-N at equal compute ----------
 // The SDE dx = [u + (eps²/2) s] dt + eps dW with eps_t² = 2 (1 - t) keeps the marginals p_t.
 export const K5 = 50, RUNS5 = 400;
 const eps2 = (t) => 2 * (1 - t);
@@ -292,7 +402,7 @@ export function runGuided(beta, run) {
 export const NS5 = [1, 2, 4, 8, 16, 32, 64];
 export const BETAS5 = [0.1, 0.2, 0.4];
 
-// ---------- Step 6: an imperfect verifier ----------
+// ---------- Step 7: an imperfect verifier ----------
 // The verifier sees r + noise (independent per sample) or r + b times a bump at a spurious place.
 export const SPUR = 3.1, SPW = 0.25;
 export const spur = (x) => Math.exp(-((x - SPUR) ** 2) / (2 * SPW * SPW));
