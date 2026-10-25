@@ -175,6 +175,6 @@ export const STEPS = [
     },
     closing: `<h3>Where this leads</h3>
       <p>§2.4 of the survey starts from the continuity equation of step 3 and learns the velocity directly, without an SDE: flow matching. The tutorial <a href="../flow-matching/">Flows and flow matching</a> follows that path. The advanced part of §2.3 bounds the error of a discretized reverse SDE by the score error, the step error and the error of starting at \\(\\N(0, I)\\) instead of the exact \\(p_0\\).</p>
-      <p>The earlier tutorials, <a href="../ebm-langevin/">Energies, scores and Langevin dynamics</a> and <a href="../score-matching/">Learning the score</a>, show how a score is used and how it is learned. The tutorial <a href="../ddpm/">DDPM</a> is the discrete-time chain whose limit this tutorial takes. The animation <a href="../../animations/flow-matching/">A1, flow matching</a> shows the deterministic transport of step 4 in 2D.</p>`,
+      <p>The earlier tutorials, <a href="../ebm-langevin/">Energies, scores and Langevin dynamics</a> and <a href="../score-matching/">Learning the score</a>, show how a score is used and how it is learned. The tutorial <a href="../ddpm/">DDPM</a> is the discrete-time chain whose limit this tutorial takes. The animation <a href="../../animations.html#a1">A1, flow matching</a> shows the deterministic transport of step 4 in 2D.</p>`,
   },
 ];

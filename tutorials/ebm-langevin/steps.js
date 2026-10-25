@@ -150,6 +150,6 @@ export const STEPS = [
     },
     closing: `<h3>Where this leads</h3>
       <p>Making the sequence of noise levels continuous turns annealed Langevin dynamics into the diffusion models of §2.3 of the survey, and §2.2 shows how the score \\(\\s_\\sigma\\) is learned from samples when it is not known.</p>
-      <p>The animation <a href="../../animations/score-langevin/">A2, Scores and Langevin dynamics</a> runs the same experiment on a spiral mixture with ten levels. It writes the step as \\(h = 2\\eta\\), so its update reads \\(\\x_{k+1} = \\x_k + \\tfrac{h}{2}\\s(\\x_k) + \\sqrt{h}\\,\\bm\\xi_k\\) with \\(h = 0.3\\,\\sigma^2\\), which is the same rule as \\(\\eta = 0.15\\,\\sigma^2\\) here.</p>`,
+      <p>The animation <a href="../../animations.html#a2">A2, Scores and Langevin dynamics</a> runs the same experiment on a spiral mixture with ten levels. It writes the step as \\(h = 2\\eta\\), so its update reads \\(\\x_{k+1} = \\x_k + \\tfrac{h}{2}\\s(\\x_k) + \\sqrt{h}\\,\\bm\\xi_k\\) with \\(h = 0.3\\,\\sigma^2\\), which is the same rule as \\(\\eta = 0.15\\,\\sigma^2\\) here.</p>`,
   },
 ];

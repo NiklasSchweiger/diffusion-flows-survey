@@ -199,6 +199,6 @@ export const STEPS = [
         <tr><td>DMD with regression</td><td>0.004</td><td></td><td></td></tr>
         <tr><td>Exact flow map</td><td>0.0009</td><td>0.0009</td><td>0.0009</td></tr>
       </tbody></table>
-      <p>The flow map and its velocity limit come from <a href="../flow-matching/">Flow matching</a> (§2.4), and the straight couplings of reflow from <a href="../couplings/">Couplings, transport and control</a> (§2.6). <a href="../inference-time/">Inference-time scaling</a> (§6) asks the opposite question: what extra network evaluations buy when they are spent at sampling time. Animations <a href="../../animations/flow-map-zoo/index.html">A9, the flow map zoo</a>, <a href="../../animations/reflow/index.html">A10, reflow</a>, and <a href="../../animations/dmd/index.html">A11, distribution matching</a>, show the same ideas in 2D.</p>`,
+      <p>The flow map and its velocity limit come from <a href="../flow-matching/">Flow matching</a> (§2.4), and the straight couplings of reflow from <a href="../couplings/">Couplings, transport and control</a> (§2.6). <a href="../inference-time/">Inference-time scaling</a> (§6) asks the opposite question: what extra network evaluations buy when they are spent at sampling time. Animations <a href="../../animations.html#a9">A9, the flow map zoo</a>, <a href="../../animations.html#a10">A10, reflow</a>, and <a href="../../animations.html#a11">A11, distribution matching</a>, show the same ideas in 2D.</p>`,
   },
 ];

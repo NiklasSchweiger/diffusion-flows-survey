@@ -166,6 +166,6 @@ export const STEPS = [
     },
     closing: `<h3>Where this leads</h3>
       <p><a href="../sde/">§2.3 of the survey</a> makes the noise level continuous and shows that the score learned here drives both a reverse-time SDE and a deterministic probability-flow ODE. §2.4 replaces the score target by the velocity target of the last step. The tutorial <a href="../ddpm/">DDPM: a chain of small Gaussian steps</a> reaches the same denoising loss from a variational bound and shows that its noise predictor is a rescaled score.</p>
-      <p>The first tutorial, <a href="../ebm-langevin/">Energies, scores and Langevin dynamics</a>, shows how a known score is used to sample. The animation <a href="../../animations/posterior-sampling/">A14, posterior sampling</a> plugs Tweedie’s denoiser into a likelihood to solve inverse problems.</p>`,
+      <p>The first tutorial, <a href="../ebm-langevin/">Energies, scores and Langevin dynamics</a>, shows how a known score is used to sample. The animation <a href="../../animations.html#a14">A14, posterior sampling</a> plugs Tweedie’s denoiser into a likelihood to solve inverse problems.</p>`,
   },
 ];

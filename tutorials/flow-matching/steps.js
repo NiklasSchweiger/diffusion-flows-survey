@@ -177,6 +177,6 @@ export const STEPS = [
     },
     closing: `<h3>Where this leads</h3>
       <p>§2.5 of the survey compares the training targets (data, noise, score and velocity) and their weightings over time, which step 5 showed to be the same field in different coordinates. §3 treats couplings and control, including the memoryless schedule of step 6, and §6 the distillation and reflow methods that straighten the paths of step 7.</p>
-      <p>The earlier tutorials, <a href="../ebm-langevin/">Energies, scores and Langevin dynamics</a>, <a href="../score-matching/">Learning the score</a> and <a href="../sde/">Diffusion as an SDE</a>, derive the score, its regression loss and the SDEs used here. The animation <a href="../../animations/flow-matching/">A1, flow matching</a> shows the straight conditional paths, the curved marginal paths and an SDE with the same marginals side by side.</p>`,
+      <p>The earlier tutorials, <a href="../ebm-langevin/">Energies, scores and Langevin dynamics</a>, <a href="../score-matching/">Learning the score</a> and <a href="../sde/">Diffusion as an SDE</a>, derive the score, its regression loss and the SDEs used here. The animation <a href="../../animations.html#a1">A1, flow matching</a> shows the straight conditional paths, the curved marginal paths and an SDE with the same marginals side by side.</p>`,
   },
 ];
