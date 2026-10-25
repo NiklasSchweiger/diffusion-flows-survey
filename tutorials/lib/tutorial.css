@@ -180,3 +180,11 @@ main { max-width: 880px; margin: 0 auto; padding: 0 24px; }
 .deriv .task .planbtn { margin-left: 0; }
 .deriv .task + .line { border-top: 0; }
 @media (max-width: 700px) { .deriv .task { grid-template-columns: minmax(0, 1fr); } }
+
+/* Comparison table of a closing section; it scrolls sideways on narrow screens. */
+.cmp-wrap { overflow-x: auto; margin: 6px 0 18px; }
+.cmp { border-collapse: collapse; min-width: 640px; width: 100%; font: 14.5px/1.45 var(--head); }
+.cmp th, .cmp td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+.cmp thead th { font-weight: 600; color: var(--fg); border-bottom: 2px solid var(--line); }
+.cmp tbody th { font: 600 11.5px/1.9 var(--head); letter-spacing: .06em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+.cmp td:nth-child(2) { background: var(--chip); }

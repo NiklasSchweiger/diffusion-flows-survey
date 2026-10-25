@@ -165,7 +165,7 @@ export const STEPS = [
       fb: { true: 'Right. With α̇ = 1, σ̇ = −1 the weight is (1 + t/(1 − t))² = (1 − t)^{−2} = 4 at t = 0.5. The lower plot shows the same value at t = 0.5.', false: 'Insert α̇_t = 1, σ̇_t = −1, α_t = σ_t = 0.5 into the bracket: 1 − (−1)(0.5/0.5) = 2, and its square is 4. You can also read the velocity curve at t = 0.5.' },
     },
     closing: `<h3>Where this leads</h3>
-      <p><a href="../sde/">§2.3 of the survey</a> makes the noise level continuous and shows that the score learned here drives both a reverse-time SDE and a deterministic probability-flow ODE. §2.4 replaces the score target by the velocity target of the last step.</p>
+      <p><a href="../sde/">§2.3 of the survey</a> makes the noise level continuous and shows that the score learned here drives both a reverse-time SDE and a deterministic probability-flow ODE. §2.4 replaces the score target by the velocity target of the last step. The tutorial <a href="../ddpm/">DDPM: a chain of small Gaussian steps</a> reaches the same denoising loss from a variational bound and shows that its noise predictor is a rescaled score.</p>
       <p>The first tutorial, <a href="../ebm-langevin/">Energies, scores and Langevin dynamics</a>, shows how a known score is used to sample. The animation <a href="../../animations/posterior-sampling/">A14, posterior sampling</a> plugs Tweedie’s denoiser into a likelihood to solve inverse problems.</p>`,
   },
 ];
