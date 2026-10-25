@@ -221,7 +221,7 @@
     <nav aria-label="Sections">
       <ol>
         <li><a href="#fundamentals"><span>01</span>Fundamentals</a></li>
-        <li><a href="#post-training"><span>02</span>Post-training and sampling</a></li>
+        <li><a href="#post-training"><span>02</span>Post-training and applications</a></li>
         <li><a href="#toolbox"><span>03</span>Math toolbox</a></li>
         <li><a href="animations.html"><span>04</span>Animations</a></li>
       </ol>
@@ -241,7 +241,7 @@
 
 <main>
   <div class="col gutter" style="padding-top:40px">
-    <p class="lede">This page accompanies a survey of diffusion and flow models. Each tutorial follows one section of Chapter 2 or one of Chapters 4 to 6. A step states a result, shows it in a plot you can change and derives it one line at a time, with a hint for every line that names the rule it uses.</p>
+    <p class="lede">This page accompanies a survey of diffusion and flow models. Each tutorial follows one section of Chapter 2 or one of Chapters 4 to 7. A step states a result, shows it in a plot you can change and derives it one line at a time, with a hint for every line that names the rule it uses.</p>
     <p>The targets in the plots are Gaussian mixtures. For a mixture the density, the score and the velocity field are available in closed form at every noise level, so the plots show exact quantities and not the output of a trained network. Where a tutorial trains a small model in the page, it says so. The survey also has seventeen <a href="animations.html">animations</a> that follow one model from pretraining to inference-time search.</p>
     <div class="note">
       <p><strong>Notation.</strong> Time runs from noise to data. At \(t=0\) the state is noise and at \(t=1\) it is data, with \(x_t=\alpha_t x_1+\sigma_t x_0\), \(x_0\sim\mathcal N(0,I)\) and \(x_1\) drawn from the data. Score-based diffusion and many image codebases use the opposite direction.</p>
@@ -362,7 +362,7 @@
   </section>
 
   <section class="stage group" id="post-training">
-    <div class="stage-head gutter"><span class="stage-num">Chapters 4 to 6</span><h2>Post-training, distillation and inference-time scaling</h2></div>
+    <div class="stage-head gutter"><span class="stage-num">Chapters 4 to 7</span><h2>Post-training, distillation, inference-time scaling and applications</h2></div>
     <div class="wide gutter">
       <div class="tuts">
         <a class="tut" href="tutorials/post-training/">
@@ -387,6 +387,14 @@
             <div class="meta">§6<span>6 steps</span></div>
             <h3>Inference-time scaling</h3>
             <p>A trained model can be improved by spending more network evaluations when it samples. The tutorial compares solvers, best-of-N, noise search, posterior sampling for an inverse problem and sequential Monte Carlo at equal compute, and ends with what happens when the reward used for selection is wrong.</p>
+          </div>
+        </a>
+        <a class="tut" href="tutorials/applications/">
+          <div class="shot"><img class="light" src="tutorials/applications/thumb-light.jpg" alt="" loading="lazy"><img class="dark" src="tutorials/applications/thumb-dark.jpg" alt="" loading="lazy"></div>
+          <div class="body">
+            <div class="meta">§7<span>6 steps</span></div>
+            <h3>Applications</h3>
+            <p>Video, world models, robot policies, molecules, proteins and weather each add a structure that the model has to respect. The tutorial isolates one design choice per application in a toy with an exact field: joint frames, rollouts on generated context, action chunks, equivariance, rigid frames on SE(3) and a proper score for ensembles.</p>
           </div>
         </a>
       </div>
