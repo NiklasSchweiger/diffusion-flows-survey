@@ -3,7 +3,7 @@
 // in the plot.
 export const SYMBOLS = {
   t: { tex: 't', name: 'Time', type: 'number in [0, 1]', shape: 'one number', def: 'The interpolation time of the generative flow. t = 0 is pure noise and t = 1 is the data, with \\(\\x_t = t\\,\\x_1 + (1 - t)\\,\\x_0\\).', canvas: 'The slider t in steps 1, 4 and 5.' },
-  x: { tex: '\\x', name: 'Sample', type: 'vector', shape: '8 frames of 64 × 40 pixels for a clip, three coordinates per atom for a molecule', def: 'One generated object: a whole clip in step 1, a frame in step 2, the centred atom coordinates of a molecule in step 4. In step 1, \\(\\x^{(n)}\\) is the n-th training item.', macro: '\\x' },
+  x: { tex: '\\x', name: 'Sample', type: 'vector', shape: '8 frames of 128 × 80 pixels for a clip, three coordinates per atom for a molecule', def: 'One generated object: a whole clip in step 1, a frame in step 2, the centred atom coordinates of a molecule in step 4. In step 1, \\(\\x^{(n)}\\) is the n-th training item.', macro: '\\x' },
   u: { tex: '\\vel', name: 'Velocity', type: 'function', shape: 'one vector per point and time', def: 'The exact field \\(\\E[\\x_1 - \\x_0\\mid\\x_t = \\x]\\) of the data distribution of each step.', macro: '\\vel' },
   F: { tex: 'F', name: 'Frames per clip', type: 'positive integer', shape: 'one number', def: 'The number of frames of a clip in step 1 (8). In step 6, F denotes the forecast distribution instead.', canvas: 'The columns of the filmstrip of step 1; the blue curve of step 6.' },
   k: { tex: 'k', name: 'Frame index', type: 'integer', shape: 'one number', def: 'The index of a frame of a rollout in step 2, or of a control step in step 3.', canvas: 'The horizontal axis of the error plot of step 2.' },

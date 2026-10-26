@@ -128,16 +128,27 @@ function whenLoaded(promise, c, onReady) {
 
 // ---------- Step 1: video ----------
 const VNAMES = { data: 'Training clips', joint: 'Joint model', independent: 'Per frame, own noise', shared: 'Per frame, shared noise' };
-const clipCols = (pal) => [pal.ramp[0], pal.ramp[1], pal.ramp[2], pal.ramp[3], pal.ok, pal.bad];
+// Six clearly distinct hues, the same in both themes.
+const clipCols = () => ['#22b8cf', '#7950f2', '#f2b01e', '#40c057', '#f0506e', '#a87b55'];
+// Sepia tone curve for the grey frames, as an RGB lookup table: dark brown to warm paper.
+const SEPIA = (() => {
+  const st = [[0, [22, 15, 10]], [0.45, [122, 88, 58]], [0.8, [214, 186, 146]], [1, [252, 242, 222]]], lut = new Uint8ClampedArray(256 * 3);
+  for (let v = 0; v < 256; v++) {
+    const u = v / 255, i = st.findIndex(([p]) => p >= u), [p0, c0] = st[Math.max(0, i - 1)], [p1, c1] = st[Math.max(i, 1)], s = p1 > p0 ? (u - p0) / (p1 - p0) : 0;
+    for (let k = 0; k < 3; k++) lut[3 * v + k] = c0[k] + s * (c1[k] - c0[k]);
+  }
+  return lut;
+})();
+function rrect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
 function videoScene(viz) {
-  const c = makeCanvas(aspect(2), { maxH: 0.72 }), ro = readout();
-  let mode = 'joint', t = 1, ph = 0, M = null, fr = null;
-  const ready = whenLoaded(loadFrames(), c, (d) => { fr = d; M = videoModel(d); draw(); });
+  const c = makeCanvas((w) => (w >= WIDE ? 16 / 6.6 : w / (w * 1.13 + 440)), { maxH: 0.78 }), ro = readout();
+  let mode = 'joint', t = 1, ph = 0, M = null, fr = null, buf = null;
+  const ready = whenLoaded(loadFrames(), c, (d) => { fr = d; M = videoModel(d); buf = new Uint8ClampedArray(d.D); draw(); });
   const r = runner({ step: () => { ph = (ph + 1) % VF; }, done: () => false, draw: () => draw(), interval: 140 });
   viz.append(c.cv, controls(...choice(VMODES.map((m) => [m, VNAMES[m]]), mode, (v) => { mode = v; draw(); }),
     slider('t', { min: 0, max: 1, step: 1 / VSTEPS, value: t }, (v) => { t = v; draw(); }), r.play), ro,
-    note(`Exact and memorizing. The data are the 62 windows of ${VF} consecutive frames from six photographic sequences by Eadweard Muybridge (1878 to 1887, public domain), at 64 × 40 pixels. Every model is the exact empirical denoiser of its training set, the softmax-weighted average of the training items, integrated with ${VSTEPS} steps. The joint model's items are whole windows; the per-frame models only know the 104 single frames, with independent noise per frame or one noise for all frames. The right grid names, for ${VN} generated clips, the training frame each generated frame converged to.`));
-  const cache = new Map(), buf = new Uint8ClampedArray(64 * 40);
+    note(`Exact and memorizing. The data are the 62 windows of ${VF} consecutive frames from six photographic sequences by Eadweard Muybridge (1878 to 1887, public domain), at 128 × 80 grey pixels, shown in sepia. Every model is the exact empirical denoiser of its training set, the softmax-weighted average of the training items, integrated with ${VSTEPS} steps. The joint model's items are whole windows; the per-frame models only know the 104 single frames, with independent noise per frame or one noise for all frames. Each tile names the training sequence its current frame converges to; the grid lists, for ${VN} generated clips, the training frame behind every generated frame.`));
+  const cache = new Map();
   function frameImg(smp, key, k, f) {
     const id = `${key}|${k}|${f}`;
     if (cache.has(id)) return cache.get(id);
@@ -145,44 +156,72 @@ function videoScene(viz) {
     M.pixels(smp, k, f, buf);
     const cv = document.createElement('canvas'); cv.width = fr.W; cv.height = fr.H;
     const cx = cv.getContext('2d'), im = cx.createImageData(fr.W, fr.H);
-    for (let i = 0; i < buf.length; i++) { im.data[4 * i] = im.data[4 * i + 1] = im.data[4 * i + 2] = buf[i]; im.data[4 * i + 3] = 255; }
+    for (let i = 0; i < buf.length; i++) { const v = 3 * buf[i]; im.data[4 * i] = SEPIA[v]; im.data[4 * i + 1] = SEPIA[v + 1]; im.data[4 * i + 2] = SEPIA[v + 2]; im.data[4 * i + 3] = 255; }
     cx.putImageData(im, 0, 0); cache.set(id, cv);
     return cv;
+  }
+  // One playing clip: the current frame large, with a vignette, the source of that frame as a tag, and the filmstrip below.
+  function tile(ctx, pal, cols, smp, key, k, src, x, y, tw) {
+    const th = tw * fr.H / fr.W, mg = 2, mw = (tw - (VF - 1) * mg) / VF, mh = mw * fr.H / fr.W;
+    ctx.save(); rrect(ctx, x, y, tw, th, 7); ctx.clip();
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(frameImg(smp, key, k, ph), x, y, tw, th);
+    const g = ctx.createRadialGradient(x + tw / 2, y + th / 2, 0.3 * tw, x + tw / 2, y + th / 2, 0.75 * tw);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(10,6,2,0.45)');
+    ctx.fillStyle = g; ctx.fillRect(x, y, tw, th);
+    ctx.restore();
+    ctx.strokeStyle = pal.line; ctx.lineWidth = 1; rrect(ctx, x + 0.5, y + 0.5, tw - 1, th - 1, 7); ctx.stroke();
+    if (src) {
+      const F = fr.frames[src[ph].k], name = `${fr.clips[F.clip].name} · ${F.idx + 1}`;
+      ctx.font = '600 10.5px Inter, system-ui, sans-serif';
+      const lw = ctx.measureText(name).width + 22;
+      ctx.fillStyle = 'rgba(12,8,4,0.62)'; rrect(ctx, x + 6, y + 6, lw, 18, 9); ctx.fill();
+      dot(ctx, x + 15, y + 15, 3.6, cols[F.clip]);
+      label(ctx, name, x + 23, y + 19, '#f6ecd9', 10.5, 'left', 600);
+    }
+    const sy = y + th + 5;
+    for (let f = 0; f < VF; f++) {
+      const mx = x + f * (mw + mg);
+      ctx.save(); rrect(ctx, mx, sy, mw, mh, 2); ctx.clip();
+      ctx.globalAlpha = f === ph ? 1 : 0.7; ctx.drawImage(frameImg(smp, key, k, f), mx, sy, mw, mh); ctx.restore();
+    }
+    ctx.strokeStyle = pal.mark; ctx.lineWidth = 1.6; rrect(ctx, x + ph * (mw + mg) - 1, sy - 1, mw + 2, mh + 2, 3); ctx.stroke();
+    return th + 5 + mh;
   }
   function draw() {
     c.fit();
     const { ctx, w, h } = c, pal = palette();
     if (!ready(pal)) return;
-    const [P1, P2] = panels(w, h, 2), R = M.run(mode), k = mode === 'data' ? 0 : Math.round(t * VSTEPS), cols = clipCols(pal);
-    // Left: VSHOW clips as filmstrips, with a playing copy in front.
-    const [x0, y0, pw, ph0] = P1, fw = Math.min((pw - 30) / (VF + 1.4) - 4, ((ph0 - 40) / VSHOW - 6) * fr.W / fr.H), fh = fw * fr.H / fr.W;
-    label(ctx, mode === 'data' ? `${VSHOW} training clips` : `${VSHOW} generated clips at t = ${f2(t)}`, x0 + 6, y0 + 18, pal.fg, 12.5);
-    const L = x0 + 6, T = y0 + 32, colX = (f) => L + fw + 14 + f * (fw + 4);
-    ctx.imageSmoothingEnabled = true;
+    const R = M.run(mode), k = mode === 'data' ? 0 : Math.round(t * VSTEPS), cols = clipCols(pal), wide = w >= WIDE, fin = mode === 'data' || k === VSTEPS;
+    // Tiles: VSHOW clips in a 3 x 2 grid (2 x 3 on narrow screens).
+    const nc = wide ? 3 : 2, nr = VSHOW / nc, gap = 12, AW = wide ? 0.62 * w : w;
+    const tileH = (tw) => tw * fr.H / fr.W + 5 + ((tw - (VF - 1) * 2) / VF) * fr.H / fr.W;
+    let tw = (AW - (nc - 1) * gap) / nc;
+    const availH = (wide ? h : h - 360) - 34 - 22;
+    while (tw > 40 && nr * tileH(tw) + (nr - 1) * gap > availH) tw -= 2;
+    label(ctx, mode === 'data' ? `${VSHOW} training clips` : `${VSHOW} generated clips at t = ${f2(t)}`, 2, 18, pal.fg, 12.5);
     for (let s = 0; s < VSHOW; s++) {
-      const smp = R.S[s], y = T + s * (fh + 6);
-      ctx.drawImage(frameImg(smp, `${mode}${s}`, k, ph), L, y, fw, fh);
-      for (let f = 0; f < VF; f++) ctx.drawImage(frameImg(smp, `${mode}${s}`, k, f), colX(f), y, fw, fh);
+      const i = s % nc, j = Math.floor(s / nc);
+      tile(ctx, pal, cols, R.S[s], `${mode}${s}`, k, fin ? R.src[s] : null, 2 + i * (tw + gap), 32 + j * (tileH(tw) + gap), tw);
     }
-    ctx.strokeStyle = pal.mark; ctx.lineWidth = 2;
-    ctx.strokeRect(colX(ph) - 1.5, T - 1.5, fw + 3, VSHOW * (fh + 6) - 3);
-    label(ctx, 'playing', L + fw / 2, T + VSHOW * (fh + 6) + 12, pal.muted, 11, 'center');
-    label(ctx, `frames 1 to ${VF}`, colX(VF - 1) + fw, T + VSHOW * (fh + 6) + 12, pal.muted, 11, 'right');
-    // Right: source of every generated frame.
-    const [u0, v0, uw, uh] = P2, legH = 3 * 16 + 8, gl = u0 + 34, gt = v0 + 32, cw = (uw - 44) / VF, rh = Math.min(22, (uh - 40 - legH) / VN);
-    label(ctx, 'Training frame each clip ends on at t = 1', u0 + 6, v0 + 18, pal.fg, 12.5);
+    const tb = 32 + nr * tileH(tw) + (nr - 1) * gap;
+    label(ctx, fin ? 'tag: training sequence and frame of the playing frame' : 'tags appear at t = 1, when every frame has converged to a training frame', 2, tb + 16, pal.muted, 11);
+    // Grid: source of every frame of VN generated clips.
+    const legH = 3 * 16 + 6, gx = wide ? AW + 40 : 0, gy = wide ? 0 : tb + 34, gw = wide ? w - gx : w, gh = wide ? h : h - gy;
+    const gl = gx + 26, gt = gy + 32, cw = Math.min(30, (gw - 30) / VF), rh = Math.min(20, (gh - 40 - legH) / VN);
+    label(ctx, 'Training frame behind each generated frame', gx, gy + 18, pal.fg, 12.5);
     R.src.forEach((row, s) => {
-      label(ctx, String(s + 1), gl - 8, gt + s * rh + rh / 2 + 4, s < VSHOW ? pal.fg : pal.muted, 11, 'right');
+      label(ctx, String(s + 1), gl - 8, gt + s * rh + rh / 2 + 4, s < VSHOW ? pal.fg : pal.muted, 10.5, 'right');
       row.forEach((q, f) => {
         const F = fr.frames[q.k], x = gl + f * cw, y = gt + s * rh;
-        ctx.fillStyle = cols[F.clip]; ctx.globalAlpha = 0.8; ctx.fillRect(x + 1, y + 1, cw - 2, rh - 2); ctx.globalAlpha = 1;
-        label(ctx, String(F.idx + 1), x + cw / 2, y + rh / 2 + 4, '#fff', 11, 'center', 600);
+        ctx.fillStyle = cols[F.clip]; ctx.globalAlpha = fin ? 0.85 : 0.25; rrect(ctx, x + 1.5, y + 1.5, cw - 3, rh - 3, 4); ctx.fill(); ctx.globalAlpha = 1;
+        if (fin) label(ctx, String(F.idx + 1), x + cw / 2, y + rh / 2 + 4, '#fff', 10.5, 'center', 600);
       });
     });
-    ctx.strokeStyle = pal.mark; ctx.lineWidth = 2; ctx.strokeRect(gl + ph * cw, gt - 1, cw, VN * rh + 2);
+    ctx.strokeStyle = pal.mark; ctx.lineWidth = 1.8; rrect(ctx, gl + ph * cw, gt - 1, cw, VN * rh + 2, 5); ctx.stroke();
     fr.clips.forEach((cl, j) => {
-      const x = u0 + 6 + (j % 2) * uw / 2, y = gt + VN * rh + 20 + Math.floor(j / 2) * 16;
-      ctx.fillStyle = cols[j]; ctx.fillRect(x, y - 9, 10, 10); label(ctx, cl.name, x + 15, y, pal.muted, 11);
+      const x = gx + (j % 2) * gw / 2, y = gt + VN * rh + 20 + Math.floor(j / 2) * 16;
+      dot(ctx, x + 5, y - 4, 4.5, cols[j]); label(ctx, cl.name, x + 15, y, pal.muted, 11);
     });
     ro.innerHTML = `${VNAMES[mode]} · clips that are consecutive frames of one training clip: <b>${pct(R.coherent)}</b> · training clips mixed per generated clip: <b>${R.clips.toFixed(1)}</b> · clips that repeat one frame: <b>${pct(R.frozen)}</b> · every generated frame is a copy of a training frame (weight ≥ ${f3(R.minW)})`;
   }

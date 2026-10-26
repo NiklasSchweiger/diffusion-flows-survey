@@ -12,7 +12,7 @@ let framesP = null, structP = null;
 export function loadFrames() {
   return (framesP ??= (async () => {
     const meta = await (await fetch(new URL('frames.json', DATA))).json();
-    const img = new Image(); img.src = new URL('frames.png', DATA).href; await img.decode();
+    const img = new Image(); img.src = new URL('frames.jpg', DATA).href; await img.decode();
     const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
     const cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(img, 0, 0);
     const px = cx.getImageData(0, 0, cv.width, cv.height).data, { W, H } = meta, frames = [];

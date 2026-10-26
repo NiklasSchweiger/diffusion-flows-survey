@@ -34,14 +34,14 @@ export const STEPS = [
     ],
     tex: `p(${x}) = \\prod_{i=1}^{${D}} p(${xi}\\mid ${xlt}), \\qquad p(${xi}\\mid ${xlt}) = \\sum_{j} ${pi}\\,\\N\\big(${xi};\\,(${mu})_i,\\,${eta}^2\\big)`,
     deriv: {
-      have: ['The mixture \\(p(\\x) = \\frac18\\sum_j \\N(\\x;\\bm\\mu_j, \\eta^2 I)\\), whose components are products over the pixels.', 'The posterior \\(\\pi_j\\) of digit j given the visible pixels \\(\\x_{<i}\\).'],
-      goal: 'p(x_i\\mid\\x_{<i}) = \\sum_j \\pi_j\\,\\N(x_i; (\\bm\\mu_j)_i, \\eta^2)',
+      have: ['The mixture \\(p(\\x) = \\frac18\\sum_j \\N(\\x;\\bm\\mu_j, \\eta^2 I)\\), whose components are products over the pixels.', 'The posterior \\(\\pi_j\\) of digit j given the visible pixels \\(\\x_{\\lt i}\\).'],
+      goal: 'p(x_i\\mid\\x_{\\lt i}) = \\sum_j \\pi_j\\,\\N(x_i; (\\bm\\mu_j)_i, \\eta^2)',
       plan: 'Write the joint as a product with the chain rule, then compute one factor by conditioning on the digit and summing over it.',
       title: 'Why every conditional is a reweighted mixture', lines: [
-        { tex: `p(\\x) = ${CHG('p(x_1)\\,p(x_2\\mid x_1)\\cdots p(x_D\\mid\\x_{<D})')}`, why: 'The chain rule of probability, applied in the chosen order. Any other order gives a different product with the same value.', uses: ['chain-rule'] },
-        { tex: `p(x_i\\mid\\x_{<i}) = \\sum_j ${CHG('p(j\\mid\\x_{<i})')}\\,p(x_i\\mid j, \\x_{<i})`, why: 'Sum over the digit j, which is the hidden variable of the mixture.', uses: ['cond-exp'] },
-        { tex: `p(x_i\\mid j, \\x_{<i}) = ${CHG('\\N(x_i; (\\bm\\mu_j)_i, \\eta^2)')}`, why: 'Given the digit the pixels are independent, so the visible pixels say nothing more about pixel i.', uses: ['gauss'] },
-        { tex: `\\pi_j = p(j\\mid\\x_{<i}) \\propto ${CHG('\\prod_{i\' < i}\\N(x_{i\'}; (\\bm\\mu_j)_{i\'}, \\eta^2)')}`, why: 'Bayes\' rule with the uniform prior over the eight digits. After each pixel the posterior is multiplied by that pixel\'s likelihood under each digit and renormalized.', uses: ['bayes'] },
+        { tex: `p(\\x) = ${CHG('p(x_1)\\,p(x_2\\mid x_1)\\cdots p(x_D\\mid\\x_{\\lt D})')}`, why: 'The chain rule of probability, applied in the chosen order. Any other order gives a different product with the same value.', uses: ['chain-rule'] },
+        { tex: `p(x_i\\mid\\x_{\\lt i}) = \\sum_j ${CHG('p(j\\mid\\x_{\\lt i})')}\\,p(x_i\\mid j, \\x_{\\lt i})`, why: 'Sum over the digit j, which is the hidden variable of the mixture.', uses: ['cond-exp'] },
+        { tex: `p(x_i\\mid j, \\x_{\\lt i}) = ${CHG('\\N(x_i; (\\bm\\mu_j)_i, \\eta^2)')}`, why: 'Given the digit the pixels are independent, so the visible pixels say nothing more about pixel i.', uses: ['gauss'] },
+        { tex: `\\pi_j = p(j\\mid\\x_{\\lt i}) \\propto ${CHG('\\prod_{i\' < i}\\N(x_{i\'}; (\\bm\\mu_j)_{i\'}, \\eta^2)')}`, why: 'Bayes\' rule with the uniform prior over the eight digits. After each pixel the posterior is multiplied by that pixel\'s likelihood under each digit and renormalized.', uses: ['bayes'] },
       ],
     },
     after: ['In raster order the first rows are background in every digit, so the posterior stays uniform for a while and becomes certain only after about 19 pixels. In random order four pixels are enough in this run. The order changes which pixels carry the decision, not the distribution that is sampled.'],
@@ -55,9 +55,9 @@ export const STEPS = [
     id: 'scale', kicker: 'Factorizing over resolutions', title: 'Next-scale prediction', scene: 'scale',
     prose: [
       'VAR factorizes the image over resolutions instead of positions. A map \\(\\bm r_1\\) of one block average is generated first, then a 3 × 3 map given it, then 6 × 6, then the full 12 × 12 image. Each factor is a whole map, and all of its tokens are predicted in one step. Four sequential steps replace the 144 of the pixel-by-pixel model.',
-      'In the toy each map is the block average of the image. Given the digit, the block averages are independent Gaussians with variance \\(\\eta^2/n\\) for blocks of n pixels, so the factor \\(p(\\bm r_s \\mid \\bm r_{<s})\\) has a closed form. The joint draw samples one digit from the posterior given the coarser maps and fills the whole map from it, which is exact. The per-token draw lets every token of the map pick its own digit from the same posterior, as a head that predicts the tokens of a step independently does. Compare the final samples and the share that passes the typicality test.',
+      'In the toy each map is the block average of the image. Given the digit, the block averages are independent Gaussians with variance \\(\\eta^2/n\\) for blocks of n pixels, so the factor \\(p(\\bm r_s \\mid \\bm r_{\\lt s})\\) has a closed form. The joint draw samples one digit from the posterior given the coarser maps and fills the whole map from it, which is exact. The per-token draw lets every token of the map pick its own digit from the same posterior, as a head that predicts the tokens of a step independently does. Compare the final samples and the share that passes the typicality test.',
     ],
-    tex: `p(${x}) = \\prod_{s} p(${r}\\mid \\bm r_{<s}), \\qquad s \\in \\{1, 3, 6, 12\\}`,
+    tex: `p(${x}) = \\prod_{s} p(${r}\\mid \\bm r_{\\lt s}), \\qquad s \\in \\{1, 3, 6, 12\\}`,
     deriv: {
       have: ['Given the digit, the J children of one parent block are independent Gaussians \\(r_q = m_q + e_q\\) with \\(e_q \\sim \\N(0, v)\\).', 'The parent is their average.'],
       goal: 'r_q = m_q + (r_{\\mathrm{parent}} - \\bar m) + (e_q - \\bar e)',
@@ -153,7 +153,7 @@ export const STEPS = [
       'Transfusion puts a full diffusion model inside a language model. One transformer reads a sequence in which text tokens and image patches are interleaved. Text tokens are trained with next-token prediction and image patches with a diffusion loss, and the two losses are added with a weight \\(\\lambda\\). What makes this work is the attention mask: attention is causal across the sequence, so text can be generated after an image and an image after text, and bidirectional within each image, so the patches of one image are denoised together as in an ordinary diffusion model.',
       'The matrix is the attention mask of a sequence of nine text tokens and two images of nine patches each. Row i shows which tokens position i may attend to. Switch between a causal mask, the Transfusion mask and a fully bidirectional one, and hover a row to see what that token reads.',
     ],
-    tex: `\\mathcal L = \\mathcal L_{\\mathrm{LM}} + ${lam}\\,\\mathcal L_{\\mathrm{diff}}, \\qquad \\mathcal L_{\\mathrm{LM}} = -\\sum_{\\text{text}}\\log p_\\theta(y_k\\mid y_{<k}), \\quad \\mathcal L_{\\mathrm{diff}} = \\E\\big\\|${eps} - ${epsth}(${al}\\x + ${sg}${eps}, t, \\text{prefix})\\big\\|^2`,
+    tex: `\\mathcal L = \\mathcal L_{\\mathrm{LM}} + ${lam}\\,\\mathcal L_{\\mathrm{diff}}, \\qquad \\mathcal L_{\\mathrm{LM}} = -\\sum_{\\text{text}}\\log p_\\theta(y_k\\mid y_{\\lt k}), \\quad \\mathcal L_{\\mathrm{diff}} = \\E\\big\\|${eps} - ${epsth}(${al}\\x + ${sg}${eps}, t, \\text{prefix})\\big\\|^2`,
     after: ['The bidirectional block of each image is what lets the patches of one image be drawn jointly, which steps 2 and 3 showed to matter. A fully bidirectional mask would let text attend to the images that follow it, so text could no longer be generated left to right. The unified models of the survey differ mainly in where they place this boundary: Show-o2 and Transfusion run a diffusion or flow loss on the image positions of one transformer, Emu3.5 and UniAR keep discrete image tokens and next-token prediction, and UniDDT hands the image to a separate diffusion transformer that reads the language model.'],
     check: {
       q: 'Compared with a causal mask, how many query–key pairs does bidirectional attention add within one image of n = 9 patches?',

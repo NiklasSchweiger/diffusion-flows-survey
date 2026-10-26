@@ -324,8 +324,8 @@ function drawParticles(ctx, pal, v, P, r = 2.1) {
 // ---------- Step 6: one noise level ----------
 function smoothing(viz) {
   const c = makeCanvas(4 / 3), ro = readout(), N = 300, KMAX = 400;
-  let sig = 0.25, P, k, rng, g;
-  const reset = () => { P = uniformStart(N); k = 0; rng = makeRng(9); g = levelGMM(sig); };
+  let sig = 0.25, P, k, rng, g, lab0;
+  const reset = () => { P = uniformStart(N); k = 0; rng = makeRng(9); g = levelGMM(sig); lab0 = Array.from({ length: N }, (_, i) => nearest3(P[2 * i], P[2 * i + 1])); };
   const step = () => {
     const eta = ANNEAL.gamma * sig * sig, sq = Math.sqrt(2 * eta);
     for (let i = 0; i < N; i++) {
@@ -355,13 +355,16 @@ function smoothing(viz) {
     ctx.globalAlpha = 1;
     // Rings at the modes of p, sized by weight.
     MIX3.means.forEach(([mx, my], j) => { const [X, Y] = v.px(mx, my); ctx.beginPath(); ctx.arc(X, Y, 14 + 18 * W3[j], 0, 7); ctx.strokeStyle = hlc('p', pal, modeColor(pal, j)); ctx.lineWidth = isHL('p') ? 2.4 : 1.2; ctx.stroke(); });
-    drawParticles(ctx, pal, v, P);
-    tag(ctx, pal, `σ = ${sig.toFixed(2)}, step ${k} of ${KMAX}`, w - 12, 22, hlc('sigma', pal, pal.muted), 13.5, 'right');
-    tag(ctx, pal, 'heat map: p_σ', 14, 22, hlc('psig', pal, pal.muted), 13.5);
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, w, ph); ctx.clip(); drawParticles(ctx, pal, v, P); ctx.restore();
+    tag(ctx, pal, w < 520 ? `σ = ${sig.toFixed(2)}, ${k}/${KMAX}` : `σ = ${sig.toFixed(2)}, step ${k} of ${KMAX}`, w - 12, 22, hlc('sigma', pal, pal.muted), 13.5, 'right');
+    tag(ctx, pal, w < 520 ? 'p_σ' : 'heat map: p_σ', 14, 22, hlc('psig', pal, pal.muted), 13.5);
     frame(ctx, pal, 0, ph, w, h - ph);
     const mass = massPerMode(P);
-    massBars(ctx, pal, 16, ph + 8, w - 32, 108, mass, W3, 'mass per mode (filled) against the target weight (dashed line)');
-    ro.innerHTML = `σ = <b>${sig.toFixed(2)}</b> · η = γσ² = <b>${(ANNEAL.gamma * sig * sig).toFixed(4)}</b> · mass = <b>${mass.map((m) => m.toFixed(2)).join(', ')}</b> · target = ${W3.map((m) => m.toFixed(2)).join(', ')}`;
+    massBars(ctx, pal, 16, ph + 8, w - 32, 108, mass, W3, w < 520 ? 'mass (filled), target (dashed)' : 'mass per mode (filled) against the target weight (dashed line)');
+    // Mixing: share of particles whose nearest mode changed since the start. Shape: mean distance to the nearest mode.
+    let moved = 0, dist = 0;
+    for (let i = 0; i < N; i++) { const j = nearest3(P[2 * i], P[2 * i + 1]), [mx, my] = MIX3.means[j]; if (j !== lab0[i]) moved++; dist += Math.hypot(P[2 * i] - mx, P[2 * i + 1] - my) / N; }
+    ro.innerHTML = `σ = <b>${sig.toFixed(2)}</b> · η = γσ² = <b>${(ANNEAL.gamma * sig * sig).toFixed(4)}</b> · mass = <b>${mass.map((m) => m.toFixed(2)).join(', ')}</b> (target ${W3.map((m) => m.toFixed(2)).join(', ')}) · changed mode: <b>${Math.round(100 * moved / N)}%</b> · mean distance to nearest mode: <b>${dist.toFixed(2)}</b> (samples of p: ${(MIX3.std * Math.sqrt(Math.PI / 2)).toFixed(2)})`;
   }
   return { draw, active: (on) => r.setActive(on) };
 }

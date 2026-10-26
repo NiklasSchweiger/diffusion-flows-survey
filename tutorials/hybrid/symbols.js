@@ -4,7 +4,7 @@
 export const SYMBOLS = {
   x: { tex: '\\x', name: 'Image', type: 'vector in \\(\\mathbb R^{144}\\)', shape: '12 × 12 pixels in [−1, 1] plus noise', def: 'A sample of the toy distribution: one of the eight digits of §2.7 plus Gaussian noise of standard deviation η on every pixel.', macro: '\\x', canvas: 'The large image of step 1 and the small images of steps 2 to 5.' },
   xi: { tex: 'x_i', name: 'Pixel', type: 'number', shape: 'one per position', def: 'The value of pixel i. In step 1 the pixels are generated one at a time in the chosen order.', canvas: 'The ringed pixel of step 1.' },
-  xlt: { tex: '\\x_{<i}', name: 'Visible pixels', type: 'vector', shape: 'the pixels before i in the order', def: 'The pixels generated before pixel i. The conditional of pixel i depends on them only through the posterior over the digits.' },
+  xlt: { tex: '\\x_{\\lt i}', name: 'Visible pixels', type: 'vector', shape: 'the pixels before i in the order', def: 'The pixels generated before pixel i. The conditional of pixel i depends on them only through the posterior over the digits.' },
   D: { tex: 'D', name: 'Number of pixels', type: 'positive integer', shape: 'one number', def: 'D = 144 for a 12 × 12 image.' },
   mu: { tex: '\\bm\\mu_j', name: 'Digit j', type: 'vector in \\(\\mathbb R^{144}\\)', shape: 'one per digit, eight in all', def: 'The mean image of mixture component j, the clean digit j drawn with strokes.', canvas: 'The labels 0 to 7 under the bars of step 1.' },
   eta: { tex: '\\eta', name: 'Pixel noise', type: 'number > 0', shape: 'one number', def: 'The standard deviation of the noise around the digit, η = 0.3. Given the digit the pixels are independent.' },
