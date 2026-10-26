@@ -1,9 +1,8 @@
 // Numerics of the steps of the §7 tutorial that run on real data: Muybridge's photographs (video),
-// a small maze game (world model), PubChem conformers (molecules) and PDB backbones (proteins). The
-// files are in data/, with their sources in data/SOURCES.md. Every model is exact for its data set:
-// the empirical denoiser of the frames, a hand-specified next-frame distribution, the posterior over
-// rotations of one conformer, and the conditional paths on SE(3). Convention: t = 0 noise, t = 1 data,
-// x_t = t x_1 + (1 - t) x_0. Only the two loaders touch the DOM.
+// PubChem conformers (molecules) and PDB backbones (proteins). The files are in data/, with their
+// sources in data/SOURCES.md. Every model is exact for its data set: the empirical denoiser of the
+// frames, the posterior over rotations of one conformer, and the conditional paths on SE(3).
+// Convention: t = 0 noise, t = 1 data, x_t = t x_1 + (1 - t) x_0. Only the two loaders touch the DOM.
 import { makeRng } from '../../animations/lib/rng.js';
 
 const DATA = new URL('./data/', import.meta.url);
@@ -97,57 +96,6 @@ export function videoModel(fr) {
   }
   return { run, pixels, wins: wins.length, N };
 }
-
-// ---------- Step 3: a world model of a maze game ----------
-// The frame is fully determined by the player's cell, so a model's next frame is a distribution q over
-// cells and its picture is the average of the frames, the player drawn with opacity q. The true game
-// moves the player one cell in the direction of the key unless a wall is in the way. Both models move
-// a share 1 - eps of the mass correctly, 0.6 eps one cell too far and 0.4 eps not at all; without a
-// key, eps spreads evenly to the open neighbours. Model B first replaces its context by the frame of
-// its most likely cell, which changes nothing on a real frame.
-export const MAZE = [
-  '################',
-  '#......#.......#',
-  '#.####.#.#####.#',
-  '#.#..........#.#',
-  '#.#.##.###.#.#.#',
-  '#...#....#.#...#',
-  '###.#.##.#.###.#',
-  '#.....#......#.#',
-  '#.###...####...#',
-  '################',
-];
-export const MW = MAZE[0].length, MH = MAZE.length, START = 1 * MW + 1;
-export const open = (c) => MAZE[Math.floor(c / MW)][c % MW] !== '#';
-const DIRS = { left: -1, right: 1, up: -MW, down: MW };
-const move = (c, a) => (a && open(c + DIRS[a]) ? c + DIRS[a] : c);
-function modelStep(q, a, eps) {
-  const r = new Float64Array(q.length);
-  q.forEach((m, c) => {
-    if (m < 1e-12) return;
-    if (a) { const c1 = move(c, a); r[c1] += (1 - eps) * m; r[move(c1, a)] += 0.6 * eps * m; r[c] += 0.4 * eps * m; return; }
-    const nb = Object.keys(DIRS).map((d) => c + DIRS[d]).filter(open);
-    r[c] += (1 - eps) * m + (nb.length ? 0 : eps * m);
-    nb.forEach((n) => { r[n] += eps * m / nb.length; });
-  });
-  return r;
-}
-const delta = (c) => { const q = new Float64Array(MW * MH); q[c] = 1; return q; };
-// Rollout of the game and both models for a list of keys ('left', 'right', 'up', 'down' or null).
-export function worldPlay(keys, eps) {
-  let pos = START, A = delta(START), B = delta(START);
-  const out = [{ pos, A, B, errA: 0, errB: 0 }];
-  for (const a of keys) {
-    pos = move(pos, a);
-    A = modelStep(A, a, eps);
-    let mx = 0; B.forEach((v, c) => { if (v > B[mx]) mx = c; });
-    B = modelStep(delta(mx), a, eps);
-    out.push({ pos, A, B, errA: 1 - A[pos], errB: 1 - B[pos] });
-  }
-  return out;
-}
-// A fixed run through the maze, shown before the reader presses a key.
-export const DEMO_KEYS = [...'rrrrrddrrrrrrdd...rrdd..uulluullllll..dd'].map((k) => ({ r: 'right', l: 'left', u: 'up', d: 'down', '.': null })[k]);
 
 // ---------- Rotations ----------
 const v3 = { sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], scl: (a, s) => [a[0] * s, a[1] * s, a[2] * s], dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]] };

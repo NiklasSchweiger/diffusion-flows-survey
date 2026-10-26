@@ -1,14 +1,14 @@
 // Live scenes of the §7 tutorial, one per step. Each factory gets the empty .viz element, fills it
 // with canvases and controls, and returns { draw() }. Colours of hovered symbols come from live.hl
-// through hlc(). Steps 2, 3, 5 and 6 run on real data through real.js; steps 1, 4 and 7 use sim.js.
+// through hlc(). Steps 2, 5 and 6 run on real data through real.js; steps 1, 3, 4 and 7 use sim.js.
 import { palette, makeCanvas, label, hlc, controls, slider, button, toggle, readout, note, runner } from '../lib/tutorial.js';
 import {
   loadFrames, loadStructures, VF, VSTEPS, VN, VSHOW, VMODES, videoModel,
-  MW, MH, open, worldPlay, DEMO_KEYS,
   MS, MSIG, NQ, MSTEPS, NMOL, CPK, VDW, moleculeModel, pathAtK,
   proteinModel, v3, len3, mv, mm, mt, qmat, axisRot, rotAngle, slerp,
 } from './real.js';
 import { PK, PH, NP, OBS, DEMOS, policy, crps, crpsPlain, argminK, MS6, YMEM, YOBS, ensembleScore, gDens } from './sim.js';
+import { WD, WK, WFLOOR, wFit, wRoll, wOneStep } from './sim.js';
 import { SMEANS, SW, SSD, SN, SIT, SETA, SGAM, SAMPLES, gmmDens, distill, cloudStats } from './sim.js';
 
 // ---------- Helpers ----------
@@ -230,68 +230,70 @@ function videoScene(viz) {
 }
 
 // ---------- Step 3: world model ----------
-const EPS = [0.02, 0.05, 0.1, 0.2];
-const KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', ' ': null };
+const SGS = [0.001, 0.003, 0.01, 0.02];
+const SAS = [0.001, 0.002, 0.003, 0.005, 0.01, 0.02, 0.03, 0.05, 0.1];
+const wFitM = memo((lam) => wFit(lam)), wRollM = memo((fit, sg) => wRoll(fit, sg));
 function worldScene(viz) {
-  const narrowH = (w) => 3 * (w * MH / MW + 34) + 200;
-  const c = makeCanvas((w) => (w >= WIDE ? 2.35 : w / narrowH(w)), { maxH: 0.8 }), ro = readout();
-  let eps = 0.05, keys = [...DEMO_KEYS], focused = false;
-  const cv = c.cv;
-  cv.tabIndex = 0; cv.setAttribute('aria-label', 'Maze game: select it and press the arrow keys to move, space to wait');
-  const press = (a) => { if (keys.length < 400) keys.push(a); draw(); };
-  cv.addEventListener('keydown', (e) => { if (!(e.key in KEYS)) return; e.preventDefault(); press(KEYS[e.key]); });
-  cv.addEventListener('focus', () => { focused = true; draw(); });
-  cv.addEventListener('blur', () => { focused = false; draw(); });
-  cv.addEventListener('pointerdown', () => cv.focus());
-  viz.append(cv, controls(button('←', () => press('left')), button('↑', () => press('up')), button('↓', () => press('down')), button('→', () => press('right')), button('Wait', () => press(null)),
-    button('Start over', () => { keys = []; draw(); }), button('Demo run', () => { keys = [...DEMO_KEYS]; draw(); }),
-    listSlider('eps', EPS, eps, (v) => { eps = v; draw(); })), ro,
-    note(`Exact. A frame of this game is fully determined by the player's cell, so a model's next frame is a distribution over cells, and its picture is the average of those frames: the player drawn in every cell with opacity equal to its probability. The true game moves the player one cell unless a wall is in the way. Both models move a share 1 − ε of the probability correctly, 0.6 ε one cell too far and 0.4 ε not at all; when no key is pressed, ε leaks to the open neighbours. Both condition on their own last frame. Model B first replaces it by the frame of its most likely cell, which changes nothing on a real frame, so both have the same one-step error ε. The error is 1 − (probability of the true cell).`));
-  function maze(ctx, pal, x0, y0, cs, q, col, pos, title, trail) {
-    label(ctx, title, x0, y0 - 8, pal.fg, 12.5);
-    ctx.fillStyle = pal.bg; ctx.fillRect(x0, y0, cs * MW, cs * MH);
-    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (!open(y * MW + x)) { ctx.fillStyle = pal.line; ctx.fillRect(x0 + x * cs, y0 + y * cs, cs + 0.3, cs + 0.3); }
-    if (trail) trail.forEach((p, i) => dot(ctx, x0 + (p % MW + 0.5) * cs, y0 + (Math.floor(p / MW) + 0.5) * cs, cs * 0.12, pal.faint));
-    q.forEach((v, cell) => {
-      if (v < 0.003) return;
-      ctx.globalAlpha = v; ctx.fillStyle = col;
-      const r = cs * 0.16, X = x0 + (cell % MW) * cs + r, Y = y0 + Math.floor(cell / MW) * cs + r, s = cs - 2 * r;
-      ctx.beginPath(); ctx.roundRect(X, Y, s, s, cs * 0.12); ctx.fill();
-    });
+  const kh = (w) => w * 0.3, narrowH = (w) => 3 * (kh(w) + 46) + 2 * w * 0.62 + 14;
+  const c = makeCanvas((w) => (w >= WIDE ? 16 / 8.4 : w / narrowH(w)), { maxH: 0.8 }), ro = readout();
+  let sg = 0.01, sa = 0.01;
+  viz.append(c.cv, controls(
+    listSlider('sg', SGS, sg, (v) => { sg = v; draw(); }),
+    listSlider('sa', SAS, sa, (v) => { sa = v; draw(); })), ro,
+    note('Exact. The model is linear, one matrix W per action, and every fit is the closed-form least-squares solution on the same 600 real pairs of frames. Training on contexts with added noise of standard deviation σ is computed as ridge regression with λ = σ², which is the same in expectation (the derivation). Teacher forcing uses λ = 10⁻⁷ only to keep the solve stable. The curves are medians over 20 rollouts of 60 frames, with the same actions and the same sampler noise for both models. The strips show the first rollout, frame k from left to right and the 48 pixels from top to bottom, with the true position dashed. A clean frame has norm 2.1, and negative pixel values are grey.'));
+  const fitOf = (lam) => wFitM(lam, lam), rollOf = (lam) => wRollM(`${lam}|${sg}`, fitOf(lam), sg);
+  function strip(ctx, pal, [x0, y0, pw, ph], film, path, col, title, titleColor) {
+    label(ctx, title, x0, y0 - 8, titleColor ?? pal.fg, 12.5);
+    ctx.fillStyle = pal.bg; ctx.fillRect(x0, y0, pw, ph);
+    const cw = pw / film.length, ch = ph / WD;
+    film.forEach((f, k) => f.forEach((v, j) => {
+      const al = Math.min(1, Math.abs(v)); if (al < 0.02) return;
+      ctx.globalAlpha = al; ctx.fillStyle = v > 0 ? col : pal.muted; ctx.fillRect(x0 + k * cw, y0 + j * ch, cw + 0.4, ch + 0.4);
+    }));
     ctx.globalAlpha = 1;
-    if (q[pos] < 1) { ctx.strokeStyle = pal.fg; ctx.lineWidth = 1.2; ctx.setLineDash([3, 3]); ctx.strokeRect(x0 + (pos % MW) * cs + 2, y0 + Math.floor(pos / MW) * cs + 2, cs - 4, cs - 4); ctx.setLineDash([]); }
-    ctx.strokeStyle = pal.line; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, cs * MW, cs * MH);
+    if (path) polyline(ctx, path.map((_, k) => x0 + (k + 0.5) * cw), path.map((q) => y0 + (q + 0.5) * ch), pal.fg, 1, [2, 3]);
+    ctx.strokeStyle = pal.line; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, pw, ph);
+    label(ctx, 'k = 0', x0, y0 + ph + 14, pal.muted, 11);
+    label(ctx, `${WK}`, x0 + pw, y0 + ph + 14, pal.muted, 11, 'right');
   }
   function draw() {
     c.fit();
-    const { ctx, w, h } = c, pal = palette(), run = worldPlay(keys, eps), last = run[run.length - 1], n = keys.length;
-    const ca = hlc('L', pal, pal.ramp[2]), cb = pal.ramp[0];
-    let cs, spots, plot;
+    const { ctx, w, h } = c, pal = palette();
+    const tf = rollOf(WFLOOR), ag = rollOf(sa * sa), ftf = fitOf(WFLOOR), fag = fitOf(sa * sa);
+    const ends = SAS.map((q) => rollOf(q * q).med[WK]), best = SAS[ends.indexOf(Math.min(...ends))];
+    const ctf = pal.ramp[2], cag = pal.ramp[0], cw = hlc('W', pal, pal.fg);
+    let spots, plots;
     if (w >= WIDE) {
-      const gap = 26; cs = Math.min((w - 2 * gap) / 3 / MW, (h * 0.55 - 24) / MH);
-      const mw = cs * MW, off = (w - 3 * mw - 2 * gap) / 2;
-      spots = [0, 1, 2].map((i) => [off + i * (mw + gap), 24]);
-      plot = [0, 24 + cs * MH + 10, w, h - (24 + cs * MH + 10)];
+      const sh = h * 0.34;
+      spots = panels(w, sh, 3).map(([x, , pw]) => [x, 24, pw, sh]);
+      plots = panels(w, h - sh - 44, 2).map(([x, y, pw, ph]) => [x, y + sh + 44, pw, ph]);
     } else {
-      cs = w / MW; spots = [0, 1, 2].map((i) => [0, 24 + i * (cs * MH + 34)]);
-      plot = [0, 3 * (cs * MH + 34), w, h - 3 * (cs * MH + 34)];
+      const H = kh(w) + 46;
+      spots = [0, 1, 2].map((i) => [0, 24 + i * H, w, kh(w)]);
+      plots = panels(w, h - 3 * H, 2).map(([x, y, pw, ph]) => [x, y + 3 * H, pw, ph]);
     }
-    const delta = new Float64Array(MW * MH); delta[last.pos] = 1;
-    const trail = run.slice(Math.max(0, run.length - 14), -1).map((s) => s.pos);
-    maze(ctx, pal, ...spots[0], cs, delta, pal.fg, last.pos, `The game, frame ${n}`, trail);
-    maze(ctx, pal, ...spots[1], cs, last.A, ca, last.pos, `Model A, from its own frames: error ${f2(last.errA)}`);
-    maze(ctx, pal, ...spots[2], cs, last.B, cb, last.pos, `Model B, snaps to its likeliest cell: ${f2(last.errB)}`);
-    if (!focused) { const X = spots[0][0] + cs * MW / 2, Y = spots[0][1] + cs * MH - cs / 2; ctx.globalAlpha = 0.85; ctx.fillStyle = pal.panel; ctx.fillRect(X - 130, Y - 13, 260, 22); ctx.globalAlpha = 1; label(ctx, 'Click here, then use the arrow keys', X, Y + 3, pal.mark, 12.5, 'center', 600); }
-    const K = Math.max(20, n), ax = axes(ctx, pal, plot, { xmin: 0, xmax: K, ymin: 0, ymax: 1, xt: [0, Math.round(K / 2), K], yt: [0, 0.5, 1], xl: 'frame k', title: 'Error of each generated frame' });
-    const ks = run.map((_, k) => k);
-    clip(ctx, ax.L, ax.T - 1, ax.R - ax.L, ax.B - ax.T + 2);
-    polyline(ctx, [ax.X(0), ax.X(Math.min(K, 1 / eps))], [ax.Y(0), ax.Y(Math.min(1, K * eps))], hlc('eps', pal, pal.muted), 1.4, [5, 4]);
-    if (K * eps > 1) polyline(ctx, [ax.X(1 / eps), ax.X(K)], [ax.Y(1), ax.Y(1)], hlc('eps', pal, pal.muted), 1.4, [5, 4]);
-    polyline(ctx, ks.map(ax.X), run.map((s) => ax.Y(s.errA)), ca, 2);
-    polyline(ctx, ks.map(ax.X), run.map((s) => ax.Y(s.errB)), cb, 2);
-    ctx.restore();
-    legend(ctx, ax, [['bound k ε', hlc('eps', pal, pal.muted), [5, 4]], ['model A', ca], ['model B', cb]], true, false, pal.panel);
-    ro.innerHTML = `ε = <b>${eps}</b> · frame <b>${n}</b> · error of model A <b>${f3(last.errA)}</b>, of model B <b>${f3(last.errB)}</b> · the bound k ε = ${f2(n * eps)}${n * eps >= 1 ? ' <b>is vacuous</b>' : ''}`;
+    strip(ctx, pal, spots[0], tf.truth, null, pal.fg, 'The game');
+    strip(ctx, pal, spots[1], tf.film, tf.path, ctf, `Teacher forcing, ‖W‖ = ${ftf.norm.toFixed(1)}`, cw);
+    strip(ctx, pal, spots[2], ag.film, ag.path, cag, `Noisy context σ = ${sa}, ‖W‖ = ${fag.norm.toFixed(1)}`, cw);
+    // Error of each generated frame.
+    const ymax = niceMax(Math.max(...tf.med, ...ag.med));
+    const ax = axes(ctx, pal, plots[0], { xmin: 0, xmax: WK, ymin: 0, ymax, xt: [0, WK / 2, WK], yt: [0, ymax / 2, ymax], xl: 'frame k', title: 'Error of each generated frame', titleColor: hlc('e', pal, pal.fg) });
+    const ks = tf.med.map((_, k) => k);
+    polyline(ctx, ks.map(ax.X), tf.med.map(ax.Y), ctf, 2);
+    polyline(ctx, ks.map(ax.X), ag.med.map(ax.Y), cag, 2);
+    legend(ctx, ax, [['teacher forcing', ctf], [`noisy context, σ = ${sa}`, cag]], true, false, pal.panel);
+    // Error after WK frames against the context noise.
+    const lx = (q) => Math.log10(q), umax = niceMax(Math.max(...ends, tf.med[WK]));
+    const bx = axes(ctx, pal, plots[1], { xmin: -3, xmax: -1, ymin: 0, ymax: umax, xt: [-3, -2, -1], yt: [0, umax / 2, umax], xfmt: (q) => String(10 ** q), xl: 'context noise σ (log scale)', title: `Error after ${WK} frames`, titleColor: hlc('e', pal, pal.fg) });
+    hdash(ctx, ctf, bx.L, bx.R, bx.Y(tf.med[WK]), 1.6, [5, 4]);
+    polyline(ctx, SAS.map((q) => bx.X(lx(q))), ends.map(bx.Y), cag, 2);
+    SAS.forEach((q, i) => dot(ctx, bx.X(lx(q)), bx.Y(ends[i]), 2.6, cag));
+    ring(ctx, bx.X(lx(best)), bx.Y(ends[SAS.indexOf(best)]), 7, pal.fg, 1.2);
+    const mx = bx.X(lx(sa)), my = bx.Y(ag.med[WK]);
+    dot(ctx, mx, my, 5, hlc('sa', pal, cag));
+    label(ctx, `‖W‖ = ${fag.norm.toFixed(1)}`, mx, my - 12, cw, 11.5, mx > (bx.L + bx.R) / 2 ? 'right' : 'left');
+    legend(ctx, bx, [['teacher forcing', ctf, [5, 4]], ['noisy context', cag]], true, false, pal.panel);
+    ro.innerHTML = `σ<sub>g</sub> = <b>${sg}</b> · teacher forcing: one-step error <b>${f3(wOneStep(ftf))}</b>, ‖W‖ = <b>${ftf.norm.toFixed(1)}</b>, error after ${WK} frames <b>${f2(tf.med[WK])}</b> · noisy context σ = <b>${sa}</b>: <b>${f3(wOneStep(fag))}</b>, <b>${fag.norm.toFixed(1)}</b>, <b>${f2(ag.med[WK])}</b> · best σ for this σ<sub>g</sub>: <b>${best}</b>`;
   }
   return { draw };
 }

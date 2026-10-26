@@ -1,6 +1,6 @@
-// Numerics of steps 1, 4 and 7 of the §7 tutorial: the robot policy, the CRPS and score distillation.
-// The steps on real data are in real.js. All three toys are exact (closed form) or Monte Carlo over
-// seeded draws, and no function here touches the DOM. The policy's flow time is τ.
+// Numerics of steps 1, 3, 4 and 7 of the §7 tutorial: the robot policy, a linear world model, the CRPS
+// and score distillation. The steps on real data are in real.js. All four toys are exact (closed form)
+// or Monte Carlo over seeded draws, and no function here touches the DOM. The policy's flow time is τ.
 import { makeRng } from '../../animations/lib/rng.js';
 import { GMM } from '../../animations/lib/gmm.js';
 import { Phi } from '../lib/mix1d.js';
@@ -130,4 +130,89 @@ export function cloudStats(P) {
   });
   let sq = 0; P.forEach(([x, y], i) => { const k = ks[i]; sq += (x - c[k][0] / n[k]) ** 2 + (y - c[k][1] / n[k]) ** 2; });
   return { share: n.map((v) => v / P.length), inside: inside / P.length, spread: Math.sqrt(sq / P.length / 2) };
+}
+
+// ---------- Step 3: a linear world model of a 1D game ----------
+// The game is a strip of WD pixels with a bright blob at the player's position s; the action a in
+// {-1, 0, 1} moves it by WSTEP pixels. The model predicts the next frame linearly, x' = [x, 1] W_a,
+// and is fitted by least squares on WN real frame pairs. Training on contexts with added noise of
+// standard deviation σ equals, in expectation, ridge regression with λ = σ² (the bias is not
+// penalized), so every fit here is the closed-form ridge solution. In a rollout, each generated
+// frame gets pixel noise σ_g, the residual of a few-step sampler, and becomes the next context.
+export const WD = 48, WSTEP = 1.5, WSIG = 2.5, WN = 600, WK = 60, WR = 20, WFLOOR = 1e-7;
+const WLO = 3, WHI = WD - 4, WA = [-1, 0, 1], WP = WD + 1;
+export const wRender = (s) => Float64Array.from({ length: WD }, (_, i) => Math.exp(-((i - s) ** 2) / (2 * WSIG * WSIG)));
+const wMove = (s, a) => Math.min(WHI, Math.max(WLO, s + a * WSTEP));
+// Gram matrix [X, 1]^T [X, 1] and right-hand sides [X, 1]^T Y_a of the training pairs.
+const WGRAM = (() => {
+  const rng = makeRng(1), G = new Float64Array(WP * WP), B = WA.map(() => new Float64Array(WP * WD));
+  for (let n = 0; n < WN; n++) {
+    const s = WLO + (WHI - WLO) * rng.uniform(), x = [...wRender(s), 1];
+    for (let i = 0; i < WP; i++) for (let j = 0; j < WP; j++) G[i * WP + j] += x[i] * x[j];
+    WA.forEach((a, ai) => { const y = wRender(wMove(s, a)); for (let i = 0; i < WP; i++) for (let j = 0; j < WD; j++) B[ai][i * WD + j] += x[i] * y[j]; });
+  }
+  return { G, B };
+})();
+// Spectral norm of the frame part of W (WD × WD, rows act on the context) by power iteration.
+function specNorm(W) {
+  let v = new Float64Array(WD).fill(1 / Math.sqrt(WD)), nrm = 0;
+  for (let it = 0; it < 200; it++) {
+    const u = new Float64Array(WD), w = new Float64Array(WD);
+    for (let i = 0; i < WD; i++) for (let j = 0; j < WD; j++) u[j] += v[i] * W[i * WD + j];
+    for (let i = 0; i < WD; i++) for (let j = 0; j < WD; j++) w[i] += W[i * WD + j] * u[j];
+    nrm = Math.sqrt(Math.hypot(...w)); const z = Math.hypot(...w); v = w.map((q) => q / z);
+  }
+  return nrm;
+}
+// Ridge fit for λ: one W per action, and the largest spectral norm over the actions.
+export function wFit(lam) {
+  const { G, B } = WGRAM, M = Float64Array.from(G), L = new Float64Array(WP * WP);
+  for (let i = 0; i < WD; i++) M[i * WP + i] += lam * WN;
+  for (let j = 0; j < WP; j++) {   // Cholesky, M = L L^T
+    let d = M[j * WP + j]; for (let k = 0; k < j; k++) d -= L[j * WP + k] ** 2;
+    L[j * WP + j] = Math.sqrt(d);
+    for (let i = j + 1; i < WP; i++) { let s = M[i * WP + j]; for (let k = 0; k < j; k++) s -= L[i * WP + k] * L[j * WP + k]; L[i * WP + j] = s / L[j * WP + j]; }
+  }
+  const Ws = B.map((Bm) => {
+    const W = new Float64Array(WP * WD);
+    for (let c = 0; c < WD; c++) {
+      const z = new Float64Array(WP);
+      for (let i = 0; i < WP; i++) { let s = Bm[i * WD + c]; for (let k = 0; k < i; k++) s -= L[i * WP + k] * z[k]; z[i] = s / L[i * WP + i]; }
+      for (let i = WP - 1; i >= 0; i--) { let s = z[i]; for (let k = i + 1; k < WP; k++) s -= L[k * WP + i] * W[k * WD + c]; W[i * WD + c] = s / L[i * WP + i]; }
+    }
+    return W;
+  });
+  return { Ws, norm: Math.max(...Ws.map(specNorm)) };
+}
+// WR rollouts of WK frames from a real first frame, with the same actions and the same noise draws
+// for every model. Returns the median error per frame, and the frames and positions of the first rollout.
+export function wRoll(fit, sg) {
+  const ra = makeRng(9), rz = makeRng(11), errs = Array.from({ length: WK + 1 }, () => []), film = [], truth = [], path = [];
+  for (let r = 0; r < WR; r++) {
+    let s = 10 + (WD - 20) * ra.uniform(), x = wRender(s);
+    errs[0].push(0); if (!r) { film.push(x); truth.push(x); path.push(s); }
+    for (let k = 1; k <= WK; k++) {
+      const ai = Math.min(2, Math.floor(3 * ra.uniform())), W = fit.Ws[ai], y = new Float64Array(WD);
+      s = wMove(s, WA[ai]);
+      for (let j = 0; j < WD; j++) { let v = W[WD * WD + j]; for (let i = 0; i < WD; i++) v += x[i] * W[i * WD + j]; y[j] = v + sg * rz.gauss(); }
+      x = y; const t = wRender(s);
+      errs[k].push(Math.hypot(...x.map((v, j) => v - t[j])));
+      if (!r) { film.push(x); truth.push(t); path.push(s); }
+    }
+  }
+  const med = errs.map((e) => { const q = [...e].sort((a, b) => a - b); return (q[(WR >> 1) - 1] + q[WR >> 1]) / 2; });
+  return { med, film, truth, path };
+}
+// One-step error on real contexts, the quantity that teacher forcing minimizes, averaged over a grid.
+export function wOneStep(fit) {
+  let tot = 0, n = 0;
+  for (let q = 0; q < 50; q++) {
+    const s = WLO + 1 + (WHI - WLO - 2) * q / 49, x = wRender(s);
+    WA.forEach((a, ai) => {
+      const W = fit.Ws[ai], t = wRender(wMove(s, a)); let e = 0;
+      for (let j = 0; j < WD; j++) { let v = W[WD * WD + j]; for (let i = 0; i < WD; i++) v += x[i] * W[i * WD + j]; e += (v - t[j]) ** 2; }
+      tot += Math.sqrt(e); n++;
+    });
+  }
+  return tot / n;
 }

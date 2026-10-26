@@ -31,7 +31,7 @@ export const STEPS = [
       'The probability-flow ODE moves every point along a fixed path from noise to data. The flow map collects all of these paths into one function of two times: it takes a point at time s and returns where its path is at time t. Sampling is the flow map from 0 to 1 applied to noise, and every distillation method in this tutorial tries to evaluate that map, or a part of it, with few network calls.',
       'In general the flow map is only available by solving the ODE. In 1D the paths never cross, so a point keeps its rank: if a fraction q of the mass lies below it at time s, the same fraction lies below it at time t. The map is therefore the quantile function of \\(p_t\\) applied to the CDF of \\(p_s\\). Move s and t to see one jump on the left and the whole map on the right.',
     ],
-    tex: `${X}(${x}) = ${x} + \\int_{${s}}^{${t}} ${u.replace('_t', '_\\tau')}(\\x_\\tau)\\,\\dd\\tau = ${F}^{-1}\\big(F_${s}(${x})\\big)`,
+    tex: `${X}(${x}) = ${x} + \\int_{${s}}^{${t}} ${u.replace('_t', '_\\tau')}(\\x_\\tau)\\,\\dd\\tau = ${F}^{-1}\\big(F_{${s}}(${x})\\big)`,
     deriv: {
       have: ['The ODE \\(\\dot\\x_\\tau = \\vel_\\tau(\\x_\\tau)\\) carries \\(p_s\\) to \\(p_t\\) (the continuity equation of §2.4).', 'In 1D, two solutions of the ODE cannot cross, so the map \\(X_{s\\to t}\\) is increasing.'],
       goal: 'X_{s\\to t} = F_t^{-1}\\circ F_s',
