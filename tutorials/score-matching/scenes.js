@@ -93,7 +93,7 @@ function oneD(viz, ism) {
   }
   viz.append(c.cv, controls(...items), ro,
     note(ism ? `The dots under the axis are the 200 samples the fit uses. The minimizer of the sample objective is their mean ${SAMPLE_MEAN.toFixed(2)} and variance ${SAMPLE_VAR.toFixed(2)}.`
-      : 'The data are the one-dimensional mixture of §2.1 with three components. All curves are exact.'));
+      : 'The dots under the axis are 200 samples from p, all a learner has in practice. The data are the one-dimensional mixture of §2.1 with three components, and the curves are exact so that the objective can be shown.'));
   function draw() {
     c.fit();
     const { ctx, w, h } = c, pal = palette();
@@ -112,16 +112,15 @@ function oneD(viz, ism) {
     ctx.beginPath(); XS.forEach((x, i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, X(x), Y1(model(x, m, v))));
     ctx.strokeStyle = hlc(['stheta', 'theta', 'div'], pal, pal.acc); ctx.lineWidth = isHL('stheta', 'theta', 'div') ? 3.4 : 2.4; ctx.stroke();
     ctx.restore();
-    label(ctx, 'model s_θ(x) = −(x − m)/v', L + 4, top1 - 10, hlc(['stheta', 'theta'], pal, pal.acc), 13.5);
-    label(ctx, 'true score ∇log p(x), dashed', R, top1 - 10, hlc('glp', pal, pal.muted), 13.5, 'right');
-    label(ctx, 'p(x), shaded', L + 6, bot1 - 8, hlc(['p', 'Ep'], pal, pal.acc2), 12.5, 'right');
+    const narrow = w < 560;
+    label(ctx, narrow ? 'model s_θ(x)' : 'model s_θ(x) = −(x − m)/v', L + 4, top1 - 10, hlc(['stheta', 'theta'], pal, pal.acc), 13.5);
+    label(ctx, narrow ? '∇log p(x), dashed' : 'true score ∇log p(x), dashed', R, top1 - 10, hlc('glp', pal, pal.muted), 13.5, 'right');
+    label(ctx, 'p(x), shaded', L + 6, bot1 - 8, hlc(['p', 'Ep'], pal, pal.acc2), 12.5);
     label(ctx, '0', L - 8, mid1 + 4, pal.muted, 11, 'right');
     label(ctx, String(SMAX), L - 8, Y1(SMAX) + 4, pal.muted, 11, 'right'); label(ctx, String(-SMAX), L - 8, Y1(-SMAX) + 4, pal.muted, 11, 'right');
-    if (ism) {
-      ctx.fillStyle = hlc(['Ep', 'p'], pal, pal.fg); ctx.globalAlpha = 0.55;
-      SAMPLES1.forEach((x, i) => { if (x > LO && x < HI) ctx.fillRect(X(x) - 1, bot1 + 4 + (i % 4) * 3, 2, 2.5); });
-      ctx.globalAlpha = 1;
-    }
+    ctx.fillStyle = hlc(['Ep', 'p'], pal, pal.fg); ctx.globalAlpha = 0.55;
+    SAMPLES1.forEach((x, i) => { if (x > LO && x < HI) ctx.fillRect(X(x) - 1, bot1 + 4 + (i % 4) * 3, 2, 2.5); });
+    ctx.globalAlpha = 1;
     // Lower panel: the integrand whose area is the objective.
     ctx.strokeStyle = pal.line; ctx.lineWidth = 1;
     const f = ism ? (x) => p1(x) * (0.5 * model(x, m, v) ** 2 - 1 / v) : (x) => 0.5 * p1(x) * (model(x, m, v) - score1(x)) ** 2;

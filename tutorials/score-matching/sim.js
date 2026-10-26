@@ -8,7 +8,7 @@ import { MIX1, p1, score1 } from '../ebm-langevin/sim.js';
 export { MIX1, p1, score1 };
 export const alpha = (t) => t, sigma = (t) => 1 - t;
 
-// ---------- 1D data (steps 1, 2 and 4) ----------
+// ---------- 1D data (steps 1, 2 and 5) ----------
 const phi = (x, m, v) => Math.exp(-((x - m) ** 2) / (2 * v)) / Math.sqrt(2 * Math.PI * v);
 // Marginal p_t of the 1D mixture: components N(alpha mu_k, alpha^2 sd_k^2 + sigma^2).
 export function pt1(x, t) {
@@ -26,7 +26,7 @@ export function sample1(rng) {
   while (u > c && k < 2) c += MIX1.w[++k];
   return MIX1.mu[k] + MIX1.sd[k] * rng.gauss();
 }
-// Fixed samples of p (step 2) and fixed (x1, x0) pairs (step 4), drawn once so every frame agrees.
+// Fixed samples of p (step 2) and fixed (x1, x0) pairs (step 5), drawn once so every frame agrees.
 export const SAMPLES1 = (() => { const r = makeRng(21); return Float64Array.from({ length: 200 }, () => sample1(r)); })();
 export const PAIRS1 = (() => {
   const r = makeRng(22), n = 2500, x1 = new Float64Array(n), x0 = new Float64Array(n);
