@@ -1,7 +1,8 @@
-// Numerics of steps 3 and 6 of the §7 tutorial, the robot policy and the CRPS; the steps on real data
-// are in real.js. Both toys are exact (closed form) or Monte Carlo over seeded draws, and no function
-// here touches the DOM. The policy's flow time is τ.
+// Numerics of steps 1, 4 and 7 of the §7 tutorial: the robot policy, the CRPS and score distillation.
+// The steps on real data are in real.js. All three toys are exact (closed form) or Monte Carlo over
+// seeded draws, and no function here touches the DOM. The policy's flow time is τ.
 import { makeRng } from '../../animations/lib/rng.js';
+import { GMM } from '../../animations/lib/gmm.js';
 import { Phi } from '../lib/mix1d.js';
 
 const sum = (a) => a.reduce((s, v) => s + v, 0);
@@ -9,7 +10,7 @@ const mean = (a) => sum(a) / a.length;
 // E|Z| for Z ~ N(mu, v).
 export const absMoment = (mu, v) => (v <= 0 ? Math.abs(mu) : Math.sqrt(v) * Math.sqrt(2 / Math.PI) * Math.exp(-mu * mu / (2 * v)) + mu * (1 - 2 * Phi(-mu / Math.sqrt(v))));
 
-// ---------- Step 3: robot policy ----------
+// ---------- Step 1: robot policy ----------
 // Demonstrations pass an obstacle on the left or on the right. Along the forward coordinate s the
 // lateral position is y = m b(s) + d with a mode m = ±1 and an AR(1) deviation d of stationary
 // standard deviation PS and correlation PR per step. The observation is the current (s, y). The flow
@@ -52,7 +53,7 @@ export const DEMOS = (() => {
   return Array.from({ length: NPS }, () => { const m = rng.uniform() < 0.5 ? 1 : -1; let d = PS * rng.gauss(); return Array.from({ length: PK + 1 }, (_, k) => { if (k) d = PR * d + Math.sqrt(1 - PR * PR) * PS * rng.gauss(); return m * pb(k / PK) + d; }); });
 })();
 
-// ---------- Step 6: weather and the CRPS ----------
+// ---------- Step 4: weather and the CRPS ----------
 // The true predictive distribution G is a two-component mixture with mean 0. The forecast F_k scales
 // it about its mean by the spread factor k, so k = 0 is the deterministic forecast at the mean and
 // k = 1 is the truth. All expectations are exact sums of E|N(mu, v)| over pairs of components.
@@ -78,3 +79,55 @@ export function ensembleScore(xs, y, fair) {
   return a / M - b / (2 * (fair ? M * (M - 1) : M * M));
 }
 export const gDens = (x, k = 1) => G.w.reduce((a, w, j) => { const s = Math.max(k, 1e-3) * G.sd[j]; return a + w * Math.exp(-((x - k * G.mu[j]) ** 2) / (2 * s * s)) / (s * Math.sqrt(2 * Math.PI)); }, 0);
+
+// ---------- Step 7: score distillation ----------
+// The image model is an exact 2D mixture with four components; the prompt c selects the upper two.
+// The renderer is the identity, so a particle is its own rendering. One iteration draws for every
+// particle a time t ~ U[0.05, 0.95] and a noise x_0 and moves the particle by SETA times the
+// difference of two denoisers at x_t = t x + (1 - t) x_0: the guided denoiser of the model, and for SDS
+// the particle itself (the denoiser of a point mass) or for VSD the exact denoiser of the noised
+// particle cloud. This is a step of size SETA along the paper's eq:sds with the weight w(t) = (1 - t) / t.
+export const SMEANS = [[-1.6, 1.0], [1.5, 1.2], [0.2, -1.5], [1.9, -1.0]], SW = [0.4, 0.3, 0.2, 0.1], SSD = 0.3;
+export const SN = 200, SIT = 600, SETA = 0.05, SGAM = [1, 3, 7.5, 20];
+const GU = new GMM(SMEANS, SSD, { weights: SW }), GC = new GMM(SMEANS.slice(0, 2), SSD, { weights: SW.slice(0, 2) });
+export const gmmDens = (x, y, cond) => {
+  const K = cond ? 2 : 4, z = cond ? SW[0] + SW[1] : 1;
+  let p = 0; for (let k = 0; k < K; k++) p += SW[k] / z * Math.exp(-((x - SMEANS[k][0]) ** 2 + (y - SMEANS[k][1]) ** 2) / (2 * SSD * SSD));
+  return p / (2 * Math.PI * SSD * SSD);
+};
+// Seeded samples of the prompt's distribution p(x | c), for comparison.
+export const SAMPLES = (() => { const rng = makeRng(31); return Array.from({ length: SN }, () => { const s = GC.sample(rng); return [s.x, s.y]; }); })();
+// The particle cloud after every iteration, computed on demand. kind is 'sds' or 'vsd'.
+export function distill(kind, gam) {
+  const init = makeRng(5), rng = makeRng(9);
+  let P = Array.from({ length: SN }, () => [init.gauss(), init.gauss()]);
+  const hist = [P];
+  const step = () => {
+    const Q = P.map((p) => p.slice());
+    for (let i = 0; i < SN; i++) {
+      const t = 0.05 + 0.9 * rng.uniform(), s = 1 - t, x = t * P[i][0] + s * rng.gauss(), y = t * P[i][1] + s * rng.gauss();
+      const du = GU.fields(x, y, t).d1, dc = GC.fields(x, y, t).d1, D = [du[0] + gam * (dc[0] - du[0]), du[1] + gam * (dc[1] - du[1])];
+      let E = P[i];
+      if (kind === 'vsd') {
+        let mx = -Infinity; const l = P.map((q) => { const a = -((x - t * q[0]) ** 2 + (y - t * q[1]) ** 2) / (2 * s * s); if (a > mx) mx = a; return a; });
+        let z = 0, ex = 0, ey = 0; l.forEach((a, j) => { const w = Math.exp(a - mx); z += w; ex += w * P[j][0]; ey += w * P[j][1]; });
+        E = [ex / z, ey / z];
+      }
+      Q[i][0] += SETA * (D[0] - E[0]); Q[i][1] += SETA * (D[1] - E[1]);
+    }
+    P = Q; hist.push(P);
+  };
+  return { at: (k) => { while (hist.length <= Math.min(k, SIT)) step(); return hist[Math.min(k, SIT)]; } };
+}
+// For a cloud of points: the share nearest to each prompt mode, the share within 2.5 standard
+// deviations of its mode, and the spread, the RMS distance per coordinate to the centroid of the
+// points that share its nearest mode (SSD for exact samples).
+export function cloudStats(P) {
+  const n = [0, 0], c = [[0, 0], [0, 0]], ks = []; let inside = 0;
+  P.forEach(([x, y]) => {
+    const d = SMEANS.slice(0, 2).map(([a, b]) => (x - a) ** 2 + (y - b) ** 2), k = d[0] <= d[1] ? 0 : 1;
+    n[k]++; c[k][0] += x; c[k][1] += y; ks.push(k); if (d[k] < (2.5 * SSD) ** 2) inside++;
+  });
+  let sq = 0; P.forEach(([x, y], i) => { const k = ks[i]; sq += (x - c[k][0] / n[k]) ** 2 + (y - c[k][1] / n[k]) ** 2; });
+  return { share: n.map((v) => v / P.length), inside: inside / P.length, spread: Math.sqrt(sq / P.length / 2) };
+}

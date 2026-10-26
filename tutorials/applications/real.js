@@ -32,7 +32,7 @@ export const loadStructures = () => (structP ??= fetch(new URL('structures.json'
 const dotv = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
 function softmax(l) { const m = Math.max(...l); let z = 0; const w = l.map((v) => { const e = Math.exp(v - m); z += e; return e; }); return w.map((v) => v / z); }
 
-// ---------- Step 1: video from Muybridge's photographs ----------
+// ---------- Step 2: video from Muybridge's photographs ----------
 // The data are all windows of VF consecutive frames of the six clips. Every model is the exact
 // empirical denoiser of its data, E[x_1 | x_t] = sum_k w_k m_k with softmax weights, so it memorizes.
 // A state x_t = a z + sum_k c_k (frame k) stays in the span of the noise z and the frames under the
@@ -98,7 +98,7 @@ export function videoModel(fr) {
   return { run, pixels, wins: wins.length, N };
 }
 
-// ---------- Step 2: a world model of a maze game ----------
+// ---------- Step 3: a world model of a maze game ----------
 // The frame is fully determined by the player's cell, so a model's next frame is a distribution q over
 // cells and its picture is the average of the frames, the player drawn with opacity q. The true game
 // moves the player one cell in the direction of the key unless a wall is in the way. Both models move
@@ -205,12 +205,14 @@ function bestRot(C) {
   return qmat(topEig4([[xx + yy + zz, yz - zy, zx - xz, xy - yx], [yz - zy, xx - yy - zz, xy + yx, zx + xz], [zx - xz, xy + yx, -xx + yy - zz, yz + zy], [xy - yx, zx + xz, yz + zy, -xx - yy + zz]]));
 }
 
-// ---------- Step 4: molecules ----------
+// ---------- Step 5: molecules ----------
 // The data of one molecule are its conformer m (centred) at a random rotation R, with Gaussian noise of
 // standard deviation MS per coordinate: x_1 = R m + MS ξ. Given x_t, the posterior over R has the density
 // exp((t / v) <R, C>) with C = sum_i x_i m_iᵀ and v = t² MS² + (1 - t)² MSIG². It is evaluated on NQ
 // rotations R* Q_q around its mode R*, which makes the field exactly equivariant: rotating x_t by g
-// rotates R* and with it every quadrature point. With 'one', the data contain only R = I.
+// rotates R* and with it every quadrature point. This is the field of the scene's 'equivariant field': the
+// best equivariant field for data in one orientation is the exact field of the rotated data. With 'one',
+// the data contain only R = I, which is the plain field.
 export const MS = 0.1, MSIG = 2, NQ = 4096, MSTEPS = 60, NMOL = 32;
 const QUAD = (() => { const rng = makeRng(77), Q = [qmat([1, 0, 0, 0])]; for (let i = 1; i < NQ; i++) Q.push(qmat(randQuat(rng))); return Q; })();
 export const CPK = { H: '#e8e8e8', C: '#5a5f69', N: '#3b6fe0', O: '#e0412f', S: '#e5c33a' };
@@ -256,7 +258,7 @@ export function moleculeModel(mol) {
 }
 export const pathAtK = (path, t) => { const u = Math.min(Math.max(t, 0), 1) * (path.length - 1), k = Math.min(Math.floor(u), path.length - 2), a = u - k; return path[k].map((p, i) => p.map((v, d) => (1 - a) * v + a * path[k + 1][i][d])); };
 
-// ---------- Step 5: protein backbones on SE(3) ----------
+// ---------- Step 6: protein backbones on SE(3) ----------
 // Frames from the real N, Cα and C atoms: e1 along Cα→C, e2 in the N–Cα–C plane, e3 = e1 × e2. Each
 // residue keeps its own N and C coordinates in its frame, so the frame path keeps every bond exact.
 // The noise draws the Cα positions from a centred Gaussian that matches the protein's radius of

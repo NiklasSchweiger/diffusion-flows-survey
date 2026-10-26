@@ -1,6 +1,6 @@
 // Live scenes of the §7 tutorial, one per step. Each factory gets the empty .viz element, fills it
 // with canvases and controls, and returns { draw() }. Colours of hovered symbols come from live.hl
-// through hlc(). Steps 1, 2, 4 and 5 run on real data through real.js; steps 3 and 6 use sim.js.
+// through hlc(). Steps 2, 3, 5 and 6 run on real data through real.js; steps 1, 4 and 7 use sim.js.
 import { palette, makeCanvas, label, hlc, controls, slider, button, toggle, readout, note, runner } from '../lib/tutorial.js';
 import {
   loadFrames, loadStructures, VF, VSTEPS, VN, VSHOW, VMODES, videoModel,
@@ -9,6 +9,7 @@ import {
   proteinModel, v3, len3, mv, mm, mt, qmat, axisRot, rotAngle, slerp,
 } from './real.js';
 import { PK, PH, NP, OBS, DEMOS, policy, crps, crpsPlain, argminK, MS6, YMEM, YOBS, ensembleScore, gDens } from './sim.js';
+import { SMEANS, SW, SSD, SN, SIT, SETA, SGAM, SAMPLES, gmmDens, distill, cloudStats } from './sim.js';
 
 // ---------- Helpers ----------
 const dot = (ctx, X, Y, r, color) => { ctx.beginPath(); ctx.arc(X, Y, r, 0, 7); ctx.fillStyle = color; ctx.fill(); };
@@ -77,7 +78,7 @@ function choice(items, value, on) {
   return bs;
 }
 
-// ---------- 3D drawing for steps 4 and 5 ----------
+// ---------- 3D drawing for steps 5 and 6 ----------
 // Orthographic view: V rotates the coordinates, x goes right, y up, and larger z is nearer.
 function dragRotate(cv, view, redraw) {
   cv.addEventListener('pointerdown', (e) => {
@@ -126,7 +127,7 @@ function whenLoaded(promise, c, onReady) {
   return (pal) => { if (state === 'ready') return true; label(c.ctx, state === 'loading' ? 'Loading the data…' : state, 20, 30, pal.muted, 13); return false; };
 }
 
-// ---------- Step 1: video ----------
+// ---------- Step 2: video ----------
 const VNAMES = { data: 'Training clips', joint: 'Joint model', independent: 'Per frame, own noise', shared: 'Per frame, shared noise' };
 // Six clearly distinct hues, the same in both themes.
 const clipCols = () => ['#22b8cf', '#7950f2', '#f2b01e', '#40c057', '#f0506e', '#a87b55'];
@@ -228,7 +229,7 @@ function videoScene(viz) {
   return { draw, active: (on) => r.setActive(on) };
 }
 
-// ---------- Step 2: world model ----------
+// ---------- Step 3: world model ----------
 const EPS = [0.02, 0.05, 0.1, 0.2];
 const KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', ' ': null };
 function worldScene(viz) {
@@ -295,7 +296,7 @@ function worldScene(viz) {
   return { draw };
 }
 
-// ---------- Step 3: robot policy ----------
+// ---------- Step 1: robot policy ----------
 const PNAMES = { demo: 'Demonstrations', reg: 'Regression policy', flow: 'Flow policy' };
 function policyScene(viz) {
   const c = makeCanvas(aspect(2), { maxH: 0.72 }), ro = readout();
@@ -332,7 +333,7 @@ function policyScene(viz) {
   return { draw };
 }
 
-// ---------- Step 4: molecules and symmetry ----------
+// ---------- Step 5: molecules and symmetry ----------
 const deg = (r) => r * 180 / Math.PI;
 const G_AXIS = [1, 2, 0.5];
 // Plays t from 0 to 1 on its slider.
@@ -348,9 +349,9 @@ function moleculeScene(viz) {
   const pick = controls();
   const ready = whenLoaded(loadStructures(), c, (d) => { models = d.molecules.map((m) => ({ name: m.name, cid: m.cid, M: moleculeModel(m) })); pick.append(...choice(models.map((m, i) => [i, m.name]), mi, (v) => { mi = v; draw(); })); draw(); });
   const tSl = slider('t', { min: 0, max: 1, step: 0.01, value: t }, (v) => { t = v; draw(); }), r = tPlayer(() => t, (v) => { t = v; }, tSl);
-  viz.append(c.cv, pick, controls(slider('th', { min: 0, max: 6.28, step: 0.02, value: th, fmt: (v) => `${Math.round(deg(v))}°` }, (v) => { th = v; draw(); }), tSl, r.start,
-    toggle('Train on one orientation', one, (v) => { one = v; draw(); })), ro,
-    note(`Exact. The conformers are PubChem's 3D structures (public domain), hydrogens included, centred at the origin. The data are one conformer m at a uniformly random rotation R with Gaussian noise of ${MS} Å per coordinate, and the noise x<sub>0</sub> is a centred Gaussian with ${MSIG} Å per coordinate. Given x<sub>t</sub>, the posterior over R is proportional to exp((t / v) tr(Rᵀ C)) with C = Σ<sub>i</sub> x<sub>t,i</sub> m<sub>i</sub>ᵀ; the field averages it over ${NQ} seeded rotations around its mode and is integrated with ${MSTEPS} steps. The toggle replaces the data by the single orientation R = I. Drag the molecule to turn the view.`));
+  viz.append(c.cv, pick, controls(...choice([[false, 'Equivariant field'], [true, 'Plain field']], one, (v) => { one = v; draw(); }),
+    slider('th', { min: 0, max: 6.28, step: 0.02, value: th, fmt: (v) => `${Math.round(deg(v))}°` }, (v) => { th = v; draw(); }), tSl, r.start), ro,
+    note(`Exact. The conformers are PubChem's 3D structures (public domain), hydrogens included, centred at the origin. The training data are one conformer m in one orientation with Gaussian noise of ${MS} Å per coordinate, and the noise x<sub>0</sub> is a centred Gaussian with ${MSIG} Å per coordinate. The plain field is the exact field of these data. The equivariant field is the best equivariant field for the same data, which by the derivation is the exact field of the data at a uniformly random rotation R. Given x<sub>t</sub>, the posterior over R is proportional to exp((t / v) tr(Rᵀ C)) with C = Σ<sub>i</sub> x<sub>t,i</sub> m<sub>i</sub>ᵀ; the field averages it over ${NQ} seeded rotations around its mode. Both are integrated with ${MSTEPS} steps. Drag the molecule to turn the view.`));
   dragRotate(c.cv, view, () => draw());
   const flows = memo((M, one, th) => M.flow(M.noise(3).map((p) => mv(axisRot(G_AXIS, th), p)), one));
   function draw() {
@@ -381,7 +382,7 @@ function moleculeScene(viz) {
   return { draw, active: (on) => r.setActive(on) };
 }
 
-// ---------- Step 5: protein frames ----------
+// ---------- Step 6: protein frames ----------
 const SSW = { H: 1.2, E: 1.4, C: 0.3 };
 const unit = (a) => v3.scl(a, 1 / len3(a));
 const cr = (a, b, c, d, u) => b.map((_, k) => 0.5 * (2 * b[k] + (c[k] - a[k]) * u + (2 * a[k] - 5 * b[k] + 4 * c[k] - d[k]) * u * u + (3 * b[k] - a[k] - 3 * c[k] + d[k]) * u * u * u));
@@ -455,7 +456,7 @@ function proteinScene(viz) {
   return { draw, active: (on) => r.setActive(on) };
 }
 
-// ---------- Step 6: weather and the CRPS ----------
+// ---------- Step 4: weather and the CRPS ----------
 const KMAX = 2;
 function crpsScene(viz) {
   const c = makeCanvas(aspect(2), { maxH: 0.72 }), ro = readout();
@@ -495,4 +496,53 @@ function crpsScene(viz) {
   return { draw };
 }
 
-export const SCENES = { video: videoScene, world: worldScene, policy: policyScene, molecule: moleculeScene, protein: proteinScene, crps: crpsScene };
+// ---------- Step 7: score distillation ----------
+const SBOX = { xmin: -4.5, xmax: 4.5, ymin: -3.5, ymax: 5.5 };
+// A square plot of the data box inside a panel, with the prompt's density shaded and the two
+// components of the other prompt as faint rings.
+function sdsAxes(ctx, pal, [x0, y0, pw, ph], title, dens) {
+  const side = Math.min(pw - 8, ph - 30), L = x0 + (pw - side) / 2, T = y0 + 26, sc = side / (SBOX.xmax - SBOX.xmin);
+  const X = (v) => L + sc * (v - SBOX.xmin), Y = (v) => T + sc * (SBOX.ymax - v);
+  label(ctx, title, L, y0 + 16, pal.fg, 12.5);
+  ctx.drawImage(dens, L, T, side, side);
+  ctx.strokeStyle = pal.line; ctx.lineWidth = 1; ctx.strokeRect(L + 0.5, T + 0.5, side, side);
+  SMEANS.slice(2).forEach(([a, b]) => { ctx.setLineDash([3, 4]); ring(ctx, X(a), Y(b), 2 * SSD * sc, pal.faint, 1.2); ctx.setLineDash([]); });
+  return { X, Y, L, T, side };
+}
+function sdsScene(viz) {
+  const c = makeCanvas(aspect(2), { maxH: 0.72 }), ro = readout();
+  let kind = 'sds', gam = 1, k = 0, D = distill(kind, gam), dens = null, densKey = '';
+  const reset = () => { D = distill(kind, gam); k = 0; r.kick(); draw(); };
+  const r = runner({ step: () => { k = Math.min(SIT, k + 3); }, done: () => k >= SIT, draw: () => draw(), interval: 30 });
+  viz.append(c.cv, controls(...choice([['sds', 'SDS'], ['vsd', 'VSD']], kind, (v) => { kind = v; reset(); }),
+    listSlider('gam', SGAM, gam, (v) => { gam = v; reset(); }, String), r.play, button('Restart', () => { reset(); })), ro,
+    note(`Exact. The image model is a mixture of four Gaussians with standard deviation ${SSD} in the plane, and the prompt c selects the upper two, with weights ${SW[0]} and ${SW[1]}. The renderer is the identity, so the parameters ψ of an object are its rendering. Each of ${SN} particles starts at a seeded draw of N(0, I). In every iteration it draws t uniformly from [0.05, 0.95] and a noise x<sub>0</sub>, and moves by ${SETA} times the guided denoiser of the model at x<sub>t</sub> minus a second denoiser: the particle itself for SDS, the exact denoiser of the noised particle cloud for VSD. The right plot is ${SN} exact samples of the prompt. Dashed rings: the components of the other prompt.`));
+  function densImage(pal) {
+    const key = pal.fg + pal.ramp[1];
+    if (densKey === key) return dens;
+    const n = 180, cv = document.createElement('canvas'); cv.width = cv.height = n;
+    const g = cv.getContext('2d'), img = g.createImageData(n, n), [cr, cg, cb] = hexRGB(pal.ramp[1]), pmax = gmmDens(...SMEANS[0], true);
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const x = SBOX.xmin + (i + 0.5) / n * (SBOX.xmax - SBOX.xmin), y = SBOX.ymax - (j + 0.5) / n * (SBOX.ymax - SBOX.ymin), o = 4 * (j * n + i);
+      img.data[o] = cr; img.data[o + 1] = cg; img.data[o + 2] = cb; img.data[o + 3] = Math.round(110 * Math.min(1, gmmDens(x, y, true) / pmax));
+    }
+    g.putImageData(img, 0, 0); dens = cv; densKey = key;
+    return dens;
+  }
+  function draw() {
+    c.fit();
+    const { ctx, w, h } = c, pal = palette(), [P1, P2] = panels(w, h, 2), im = densImage(pal), P = D.at(k);
+    const a1 = sdsAxes(ctx, pal, P1, `${kind === 'sds' ? 'SDS' : 'VSD'} with γ = ${gam}, iteration ${k} of ${SIT}`, im);
+    const cP = hlc('psi', pal, pal.ramp[2]);
+    clip(ctx, a1.L, a1.T, a1.side, a1.side);
+    P.forEach(([x, y]) => dot(ctx, a1.X(x), a1.Y(y), 2.3, cP));
+    ctx.restore();
+    const a2 = sdsAxes(ctx, pal, P2, `${SN} samples of the prompt`, im);
+    SAMPLES.forEach(([x, y]) => dot(ctx, a2.X(x), a2.Y(y), 2.3, pal.fg));
+    const s = cloudStats(P), q = cloudStats(SAMPLES), wl = SW[0] / (SW[0] + SW[1]);
+    ro.innerHTML = `iteration <b>${k}</b> · particles in the left and the right mode: <b>${pct(s.share[0])}</b> and <b>${pct(s.share[1])}</b> (prompt: ${pct(wl)} and ${pct(1 - wl)}) · within 2.5 standard deviations of a mode: <b>${pct(s.inside)}</b> (samples: ${pct(q.inside)}) · spread around the own mode: <b>${f2(s.spread)}</b> (samples: ${f2(q.spread)})`;
+  }
+  return { draw, active: (on) => r.setActive(on) };
+}
+
+export const SCENES = { sds: sdsScene, video: videoScene, world: worldScene, policy: policyScene, molecule: moleculeScene, protein: proteinScene, crps: crpsScene };
