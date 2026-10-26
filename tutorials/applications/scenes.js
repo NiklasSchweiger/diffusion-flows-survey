@@ -1,15 +1,14 @@
 // Live scenes of the §7 tutorial, one per step. Each factory gets the empty .viz element, fills it
 // with canvases and controls, and returns { draw() }. Colours of hovered symbols come from live.hl
-// through hlc().
-import { palette, makeCanvas, label, hlc, controls, slider, button, toggle, readout, note } from '../lib/tutorial.js';
+// through hlc(). Steps 1, 2, 4 and 5 run on real data through real.js; steps 3 and 6 use sim.js.
+import { palette, makeCanvas, label, hlc, controls, slider, button, toggle, readout, note, runner } from '../lib/tutorial.js';
 import {
-  VF, VA, NV, NVS, VMODES, video, pathAt, SLOPE_SD,
-  WP, WK, WPOS, worldRollout,
-  PK, PH, NP, OBS, DEMOS, policy,
-  NROT, MS, NM, MSTEPS, MZ0, molPath, molEnds, rot2, fromSub, equivGap,
-  NR, CA1, Q0, Q1, backbone, bondErr, rmsd, ANG, RSHOW, slerp, qmat, naiveRot,
-  G, crps, crpsPlain, argminK, MS6, YMEM, YOBS, ensembleScore, gDens,
-} from './sim.js';
+  loadFrames, loadStructures, VF, VSTEPS, VN, VSHOW, VMODES, videoModel,
+  MW, MH, open, worldPlay, DEMO_KEYS,
+  MS, MSIG, NQ, MSTEPS, NMOL, CPK, VDW, moleculeModel, pathAtK,
+  proteinModel, v3, len3, mv, mm, mt, qmat, axisRot, rotAngle, slerp,
+} from './real.js';
+import { PK, PH, NP, OBS, DEMOS, policy, crps, crpsPlain, argminK, MS6, YMEM, YOBS, ensembleScore, gDens } from './sim.js';
 
 // ---------- Helpers ----------
 const dot = (ctx, X, Y, r, color) => { ctx.beginPath(); ctx.arc(X, Y, r, 0, 7); ctx.fillStyle = color; ctx.fill(); };
@@ -78,72 +77,181 @@ function choice(items, value, on) {
   return bs;
 }
 
+// ---------- 3D drawing for steps 4 and 5 ----------
+// Orthographic view: V rotates the coordinates, x goes right, y up, and larger z is nearer.
+function dragRotate(cv, view, redraw) {
+  cv.addEventListener('pointerdown', (e) => {
+    let x = e.clientX, y = e.clientY;
+    const mvh = (ev) => { const dx = ev.clientX - x, dy = ev.clientY - y; x = ev.clientX; y = ev.clientY; view.V = mm(mm(axisRot([0, 1, 0], dx * 0.01), axisRot([1, 0, 0], dy * 0.01)), view.V); redraw(); };
+    const up = () => { removeEventListener('pointermove', mvh); removeEventListener('pointerup', up); };
+    addEventListener('pointermove', mvh); addEventListener('pointerup', up);
+  });
+}
+const hexRGB = (h) => { const s = h.trim().replace('#', ''), f = s.length === 3 ? [...s].map((c) => c + c).join('') : s; return [0, 2, 4].map((i) => parseInt(f.slice(i, i + 2), 16)); };
+const mixRGB = (a, b, u) => `rgb(${a.map((v, i) => Math.round(v + u * (b[i] - v))).join(',')})`;
+// Ball-and-stick model, depth sorted. With ghost, only outlines and dashed bonds, drawn on top.
+function drawMol(ctx, pal, P, el, bonds, V, cx, cy, sc, ghost = null) {
+  const q = P.map((p) => { const v = mv(V, p); return [cx + sc * v[0], cy - sc * v[1], v[2]]; });
+  const rad = (i) => Math.max(1.6, 0.3 * VDW[el[i]] * sc);
+  if (ghost) {
+    ctx.strokeStyle = ghost; ctx.lineWidth = 1.2; ctx.setLineDash([3, 3]);
+    bonds.forEach(([i, j]) => { ctx.beginPath(); ctx.moveTo(q[i][0], q[i][1]); ctx.lineTo(q[j][0], q[j][1]); ctx.stroke(); });
+    ctx.setLineDash([]);
+    q.forEach((p, i) => ring(ctx, p[0], p[1], rad(i) + 2, ghost, 1.2));
+    return;
+  }
+  const items = [];
+  bonds.forEach(([i, j, o]) => items.push([(q[i][2] + q[j][2]) / 2 - 0.01, () => {
+    const dx = q[j][0] - q[i][0], dy = q[j][1] - q[i][1], L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L, lw = Math.max(1.4, 0.16 * sc);
+    const offs = o >= 2 ? [-0.55 * lw, 0.55 * lw] : [0];
+    ctx.lineCap = 'round';
+    offs.forEach((d) => [[i, 0, 0.5], [j, 0.5, 1]].forEach(([a, u0, u1]) => {
+      ctx.strokeStyle = CPK[el[a]] ?? '#999'; ctx.lineWidth = offs.length > 1 ? lw * 0.6 : lw;
+      ctx.beginPath(); ctx.moveTo(q[i][0] + u0 * dx + d * nx, q[i][1] + u0 * dy + d * ny); ctx.lineTo(q[i][0] + u1 * dx + d * nx, q[i][1] + u1 * dy + d * ny); ctx.stroke();
+    }));
+    ctx.lineCap = 'butt';
+  }]));
+  q.forEach(([X, Y, z], i) => items.push([z, () => {
+    const r = rad(i), c = hexRGB(CPK[el[i]] ?? '#999999'), g = ctx.createRadialGradient(X - 0.35 * r, Y - 0.4 * r, 0.1 * r, X, Y, r);
+    g.addColorStop(0, mixRGB(c, [255, 255, 255], 0.55)); g.addColorStop(0.55, mixRGB(c, c, 0)); g.addColorStop(1, mixRGB(c, [0, 0, 0], 0.45));
+    ctx.beginPath(); ctx.arc(X, Y, r, 0, 7); ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 0.8; ctx.stroke();
+  }]));
+  items.sort((a, b) => a[0] - b[0]).forEach(([, f]) => f());
+}
+// Waits for a promise of the data before the first real draw; draws a line of text meanwhile.
+function whenLoaded(promise, c, onReady) {
+  let state = 'loading';
+  promise.then((d) => { state = 'ready'; onReady(d); }, (e) => { state = `Could not load the data (${e.message}).`; });
+  return (pal) => { if (state === 'ready') return true; label(c.ctx, state === 'loading' ? 'Loading the data…' : state, 20, 30, pal.muted, 13); return false; };
+}
+
 // ---------- Step 1: video ----------
-const VNAMES = { data: 'Data', joint: 'Joint model', independent: 'Per frame, own noise', shared: 'Per frame, shared noise' };
+const VNAMES = { data: 'Training clips', joint: 'Joint model', independent: 'Per frame, own noise', shared: 'Per frame, shared noise' };
+const clipCols = (pal) => [pal.ramp[0], pal.ramp[1], pal.ramp[2], pal.ramp[3], pal.ok, pal.bad];
 function videoScene(viz) {
   const c = makeCanvas(aspect(2), { maxH: 0.72 }), ro = readout();
-  let mode = 'joint', t = 1;
+  let mode = 'joint', t = 1, ph = 0, M = null, fr = null;
+  const ready = whenLoaded(loadFrames(), c, (d) => { fr = d; M = videoModel(d); draw(); });
+  const r = runner({ step: () => { ph = (ph + 1) % VF; }, done: () => false, draw: () => draw(), interval: 140 });
   viz.append(c.cv, controls(...choice(VMODES.map((m) => [m, VNAMES[m]]), mode, (v) => { mode = v; draw(); }),
-    slider('t', { min: 0, max: 1, step: 0.02, value: t }, (v) => { t = v; draw(); })), ro,
-    note(`Exact. A clip is ${VF} frames of a dot on a line, x<sup>f</sup> = c + s·${VA}·τ<sub>f</sub> + noise, with a random offset c, a random direction s = ±1 and τ<sub>f</sub> from −0.5 to 0.5. The joint model integrates the exact velocity of this two-component Gaussian in ${VF} dimensions with RK4 (50 steps). The per-frame models use the exact one-dimensional flow map of each frame's marginal, which is all a model of single frames can learn. The histogram is over ${NV} clips.`));
+    slider('t', { min: 0, max: 1, step: 1 / VSTEPS, value: t }, (v) => { t = v; draw(); }), r.play), ro,
+    note(`Exact and memorizing. The data are the 62 windows of ${VF} consecutive frames from six photographic sequences by Eadweard Muybridge (1878 to 1887, public domain), at 64 × 40 pixels. Every model is the exact empirical denoiser of its training set, the softmax-weighted average of the training items, integrated with ${VSTEPS} steps. The joint model's items are whole windows; the per-frame models only know the 104 single frames, with independent noise per frame or one noise for all frames. The right grid names, for ${VN} generated clips, the training frame each generated frame converged to.`));
+  const cache = new Map(), buf = new Uint8ClampedArray(64 * 40);
+  function frameImg(smp, key, k, f) {
+    const id = `${key}|${k}|${f}`;
+    if (cache.has(id)) return cache.get(id);
+    if (cache.size > 1500) cache.clear();
+    M.pixels(smp, k, f, buf);
+    const cv = document.createElement('canvas'); cv.width = fr.W; cv.height = fr.H;
+    const cx = cv.getContext('2d'), im = cx.createImageData(fr.W, fr.H);
+    for (let i = 0; i < buf.length; i++) { im.data[4 * i] = im.data[4 * i + 1] = im.data[4 * i + 2] = buf[i]; im.data[4 * i + 3] = 255; }
+    cx.putImageData(im, 0, 0); cache.set(id, cv);
+    return cv;
+  }
   function draw() {
     c.fit();
-    const { ctx, w, h } = c, pal = palette(), [P1, P2] = panels(w, h, 2), r = video(mode);
-    const tt = mode === 'data' ? 1 : t;
-    const ax = axes(ctx, pal, P1, { xmin: -0.5, xmax: VF - 0.5, ymin: -3, ymax: 3, xt: [0, 3, 6, 9, 11], yt: [-3, 0, 3], xl: 'frame f', title: `${NVS} clips${mode === 'data' ? ' from the data' : ` at t = ${f2(tt)}`}` });
-    clip(ctx, ax.L, ax.T, ax.R - ax.L, ax.B - ax.T);
-    r.show.forEach((p, i) => {
-      const x = pathAt(p, tt), col = pal.ramp[i % 4];
-      polyline(ctx, x.map((_, f) => ax.X(f)), x.map(ax.Y), col, 1.6);
-      x.forEach((v, f) => dot(ctx, ax.X(f), ax.Y(v), 2.6, col));
+    const { ctx, w, h } = c, pal = palette();
+    if (!ready(pal)) return;
+    const [P1, P2] = panels(w, h, 2), R = M.run(mode), k = mode === 'data' ? 0 : Math.round(t * VSTEPS), cols = clipCols(pal);
+    // Left: VSHOW clips as filmstrips, with a playing copy in front.
+    const [x0, y0, pw, ph0] = P1, fw = Math.min((pw - 30) / (VF + 1.4) - 4, ((ph0 - 40) / VSHOW - 6) * fr.W / fr.H), fh = fw * fr.H / fr.W;
+    label(ctx, mode === 'data' ? `${VSHOW} training clips` : `${VSHOW} generated clips at t = ${f2(t)}`, x0 + 6, y0 + 18, pal.fg, 12.5);
+    const L = x0 + 6, T = y0 + 32, colX = (f) => L + fw + 14 + f * (fw + 4);
+    ctx.imageSmoothingEnabled = true;
+    for (let s = 0; s < VSHOW; s++) {
+      const smp = R.S[s], y = T + s * (fh + 6);
+      ctx.drawImage(frameImg(smp, `${mode}${s}`, k, ph), L, y, fw, fh);
+      for (let f = 0; f < VF; f++) ctx.drawImage(frameImg(smp, `${mode}${s}`, k, f), colX(f), y, fw, fh);
+    }
+    ctx.strokeStyle = pal.mark; ctx.lineWidth = 2;
+    ctx.strokeRect(colX(ph) - 1.5, T - 1.5, fw + 3, VSHOW * (fh + 6) - 3);
+    label(ctx, 'playing', L + fw / 2, T + VSHOW * (fh + 6) + 12, pal.muted, 11, 'center');
+    label(ctx, `frames 1 to ${VF}`, colX(VF - 1) + fw, T + VSHOW * (fh + 6) + 12, pal.muted, 11, 'right');
+    // Right: source of every generated frame.
+    const [u0, v0, uw, uh] = P2, legH = 3 * 16 + 8, gl = u0 + 34, gt = v0 + 32, cw = (uw - 44) / VF, rh = Math.min(22, (uh - 40 - legH) / VN);
+    label(ctx, 'Training frame each clip ends on at t = 1', u0 + 6, v0 + 18, pal.fg, 12.5);
+    R.src.forEach((row, s) => {
+      label(ctx, String(s + 1), gl - 8, gt + s * rh + rh / 2 + 4, s < VSHOW ? pal.fg : pal.muted, 11, 'right');
+      row.forEach((q, f) => {
+        const F = fr.frames[q.k], x = gl + f * cw, y = gt + s * rh;
+        ctx.fillStyle = cols[F.clip]; ctx.globalAlpha = 0.8; ctx.fillRect(x + 1, y + 1, cw - 2, rh - 2); ctx.globalAlpha = 1;
+        label(ctx, String(F.idx + 1), x + cw / 2, y + rh / 2 + 4, '#fff', 11, 'center', 600);
+      });
     });
-    ctx.restore();
-    const lo = -3.5, hi = 3.5, nb = 40, hs = hist(r.slopes, lo, hi, nb), ymax = niceMax(1.15 * Math.max(...hs));
-    const ax2 = axes(ctx, pal, P2, { xmin: lo, xmax: hi, ymin: 0, ymax, xt: [-3, -1.5, 0, 1.5, 3], yt: [0, ymax / 2, ymax], yfmt: (q) => (q ? q.toFixed(2) : '0'), xl: 'fitted speed', title: `Speed of ${NV} generated clips${mode === 'data' ? '' : ' at t = 1'}` });
-    ax2.ymax = ymax;
-    [-VA, VA].forEach((v) => vdash(ctx, pal.muted, ax2.X(v), ax2.T, ax2.B, 1.2));
-    bars(ctx, ax2, hs, lo, hi, mode === 'data' ? pal.muted : pal.ramp[1]);
-    legend(ctx, ax2, [['speeds in the data', pal.muted, [3, 4]]], true);
-    const d = video('data');
-    ro.innerHTML = `${VNAMES[mode]} · jitter <b>${f3(r.jitter)}</b> (data ${f3(d.jitter)}) · clips with a speed within 0.5 of ±${VA}: <b>${pct(r.coherent)}</b> · mean |speed| <b>${f2(r.slopes.reduce((a, s) => a + Math.abs(s), 0) / r.slopes.length)}</b>`;
+    ctx.strokeStyle = pal.mark; ctx.lineWidth = 2; ctx.strokeRect(gl + ph * cw, gt - 1, cw, VN * rh + 2);
+    fr.clips.forEach((cl, j) => {
+      const x = u0 + 6 + (j % 2) * uw / 2, y = gt + VN * rh + 20 + Math.floor(j / 2) * 16;
+      ctx.fillStyle = cols[j]; ctx.fillRect(x, y - 9, 10, 10); label(ctx, cl.name, x + 15, y, pal.muted, 11);
+    });
+    ro.innerHTML = `${VNAMES[mode]} · clips that are consecutive frames of one training clip: <b>${pct(R.coherent)}</b> · training clips mixed per generated clip: <b>${R.clips.toFixed(1)}</b> · clips that repeat one frame: <b>${pct(R.frozen)}</b> · every generated frame is a copy of a training frame (weight ≥ ${f3(R.minW)})`;
   }
-  return { draw };
+  return { draw, active: (on) => r.setActive(on) };
 }
 
 // ---------- Step 2: world model ----------
-const EPS = [0.01, 0.02, 0.05, 0.1, 0.2, 0.3], KS = [8, 16, 32, 64];
-const wMemo = memo((eps, sharpen) => worldRollout(eps, sharpen));
+const EPS = [0.02, 0.05, 0.1, 0.2];
+const KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', ' ': null };
 function worldScene(viz) {
-  const c = makeCanvas(aspect(3), { maxH: 0.72 }), ro = readout();
-  let eps = 0.05, K = 64;
-  viz.append(c.cv, controls(listSlider('eps', EPS, eps, (v) => { eps = v; draw(); }), listSlider('K', KS, K, (v) => { K = v; draw(); })), ro,
-    note(`Exact. The world is a ring of ${WP} cells with one bright cell, and the ${WK} key presses (left, none, right) are fixed. Both models move a share 1 − ε of the intensity one cell in the direction of the key, 0.6 ε one cell too far and 0.4 ε one cell too short. Model B first replaces its context by the one-hot frame at its brightest cell, which changes nothing on a real frame, so the two have the same one-step error ε on real contexts. The error is the total variation 1 − (intensity on the true cell).`));
-  function heat(ctx, pal, rect, r, title, col) {
-    const [x0, y0, pw, ph] = rect, L = x0 + 44, R = x0 + pw - 10, T = y0 + 30, B = y0 + ph - 30, cw = (R - L) / WP, rh = (B - T) / (K + 1);
-    ctx.strokeStyle = pal.line; ctx.lineWidth = 1; ctx.strokeRect(L + 0.5, T + 0.5, R - L, B - T);
-    label(ctx, title, L, T - 12, pal.fg, 12.5);
-    for (let k = 0; k <= K; k++) r.frames[k].forEach((v, i) => { if (v > 0.004) { ctx.globalAlpha = Math.min(1, Math.sqrt(v)); ctx.fillStyle = col; ctx.fillRect(L + i * cw, T + k * rh, cw + 0.3, rh + 0.3); } });
+  const narrowH = (w) => 3 * (w * MH / MW + 34) + 200;
+  const c = makeCanvas((w) => (w >= WIDE ? 2.35 : w / narrowH(w)), { maxH: 0.8 }), ro = readout();
+  let eps = 0.05, keys = [...DEMO_KEYS], focused = false;
+  const cv = c.cv;
+  cv.tabIndex = 0; cv.setAttribute('aria-label', 'Maze game: select it and press the arrow keys to move, space to wait');
+  const press = (a) => { if (keys.length < 400) keys.push(a); draw(); };
+  cv.addEventListener('keydown', (e) => { if (!(e.key in KEYS)) return; e.preventDefault(); press(KEYS[e.key]); });
+  cv.addEventListener('focus', () => { focused = true; draw(); });
+  cv.addEventListener('blur', () => { focused = false; draw(); });
+  cv.addEventListener('pointerdown', () => cv.focus());
+  viz.append(cv, controls(button('←', () => press('left')), button('↑', () => press('up')), button('↓', () => press('down')), button('→', () => press('right')), button('Wait', () => press(null)),
+    button('Start over', () => { keys = []; draw(); }), button('Demo run', () => { keys = [...DEMO_KEYS]; draw(); }),
+    listSlider('eps', EPS, eps, (v) => { eps = v; draw(); })), ro,
+    note(`Exact. A frame of this game is fully determined by the player's cell, so a model's next frame is a distribution over cells, and its picture is the average of those frames: the player drawn in every cell with opacity equal to its probability. The true game moves the player one cell unless a wall is in the way. Both models move a share 1 − ε of the probability correctly, 0.6 ε one cell too far and 0.4 ε not at all; when no key is pressed, ε leaks to the open neighbours. Both condition on their own last frame. Model B first replaces it by the frame of its most likely cell, which changes nothing on a real frame, so both have the same one-step error ε. The error is 1 − (probability of the true cell).`));
+  function maze(ctx, pal, x0, y0, cs, q, col, pos, title, trail) {
+    label(ctx, title, x0, y0 - 8, pal.fg, 12.5);
+    ctx.fillStyle = pal.bg; ctx.fillRect(x0, y0, cs * MW, cs * MH);
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (!open(y * MW + x)) { ctx.fillStyle = pal.line; ctx.fillRect(x0 + x * cs, y0 + y * cs, cs + 0.3, cs + 0.3); }
+    if (trail) trail.forEach((p, i) => dot(ctx, x0 + (p % MW + 0.5) * cs, y0 + (Math.floor(p / MW) + 0.5) * cs, cs * 0.12, pal.faint));
+    q.forEach((v, cell) => {
+      if (v < 0.003) return;
+      ctx.globalAlpha = v; ctx.fillStyle = col;
+      const r = cs * 0.16, X = x0 + (cell % MW) * cs + r, Y = y0 + Math.floor(cell / MW) * cs + r, s = cs - 2 * r;
+      ctx.beginPath(); ctx.roundRect(X, Y, s, s, cs * 0.12); ctx.fill();
+    });
     ctx.globalAlpha = 1;
-    for (let k = 0; k <= K; k++) dot(ctx, L + (WPOS[k] + 0.5) * cw, T + (k + 0.5) * rh, Math.min(2, rh / 3), pal.fg);
-    [0, K].forEach((k) => label(ctx, `k = ${k}`, L - 6, T + (k + 0.5) * rh + 4, pal.muted, 11, 'right'));
-    label(ctx, 'cell', R, B + 16, pal.muted, 11.5, 'right');
+    if (q[pos] < 1) { ctx.strokeStyle = pal.fg; ctx.lineWidth = 1.2; ctx.setLineDash([3, 3]); ctx.strokeRect(x0 + (pos % MW) * cs + 2, y0 + Math.floor(pos / MW) * cs + 2, cs - 4, cs - 4); ctx.setLineDash([]); }
+    ctx.strokeStyle = pal.line; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, cs * MW, cs * MH);
   }
   function draw() {
     c.fit();
-    const { ctx, w, h } = c, pal = palette(), [P1, P2, P3] = panels(w, h, 3), A = wMemo(`${eps}a`, eps, false), Bm = wMemo(`${eps}b`, eps, true);
+    const { ctx, w, h } = c, pal = palette(), run = worldPlay(keys, eps), last = run[run.length - 1], n = keys.length;
     const ca = hlc('L', pal, pal.ramp[2]), cb = pal.ramp[0];
-    heat(ctx, pal, P1, A, 'Model A, its own frames', ca);
-    heat(ctx, pal, P2, Bm, 'Model B, sharpens its context', cb);
-    const ax = axes(ctx, pal, P3, { xmin: 0, xmax: K, ymin: 0, ymax: 1, xt: [0, K / 2, K], yt: [0, 0.5, 1], xl: 'frame k', title: 'Error of the rollout' });
-    const ks = Array.from({ length: K + 1 }, (_, k) => k);
+    let cs, spots, plot;
+    if (w >= WIDE) {
+      const gap = 26; cs = Math.min((w - 2 * gap) / 3 / MW, (h * 0.55 - 24) / MH);
+      const mw = cs * MW, off = (w - 3 * mw - 2 * gap) / 2;
+      spots = [0, 1, 2].map((i) => [off + i * (mw + gap), 24]);
+      plot = [0, 24 + cs * MH + 10, w, h - (24 + cs * MH + 10)];
+    } else {
+      cs = w / MW; spots = [0, 1, 2].map((i) => [0, 24 + i * (cs * MH + 34)]);
+      plot = [0, 3 * (cs * MH + 34), w, h - 3 * (cs * MH + 34)];
+    }
+    const delta = new Float64Array(MW * MH); delta[last.pos] = 1;
+    const trail = run.slice(Math.max(0, run.length - 14), -1).map((s) => s.pos);
+    maze(ctx, pal, ...spots[0], cs, delta, pal.fg, last.pos, `The game, frame ${n}`, trail);
+    maze(ctx, pal, ...spots[1], cs, last.A, ca, last.pos, `Model A, from its own frames: error ${f2(last.errA)}`);
+    maze(ctx, pal, ...spots[2], cs, last.B, cb, last.pos, `Model B, snaps to its likeliest cell: ${f2(last.errB)}`);
+    if (!focused) { const X = spots[0][0] + cs * MW / 2, Y = spots[0][1] + cs * MH - cs / 2; ctx.globalAlpha = 0.85; ctx.fillStyle = pal.panel; ctx.fillRect(X - 130, Y - 13, 260, 22); ctx.globalAlpha = 1; label(ctx, 'Click here, then use the arrow keys', X, Y + 3, pal.mark, 12.5, 'center', 600); }
+    const K = Math.max(20, n), ax = axes(ctx, pal, plot, { xmin: 0, xmax: K, ymin: 0, ymax: 1, xt: [0, Math.round(K / 2), K], yt: [0, 0.5, 1], xl: 'frame k', title: 'Error of each generated frame' });
+    const ks = run.map((_, k) => k);
     clip(ctx, ax.L, ax.T - 1, ax.R - ax.L, ax.B - ax.T + 2);
-    polyline(ctx, ks.map(ax.X), ks.map((k) => ax.Y(Math.min(1, k * eps))), hlc('eps', pal, pal.muted), 1.4, [5, 4]);
-    polyline(ctx, ks.map(ax.X), ks.map((k) => ax.Y(A.err[k])), ca, 2);
-    polyline(ctx, ks.map(ax.X), ks.map((k) => ax.Y(Bm.err[k])), cb, 2);
+    polyline(ctx, [ax.X(0), ax.X(Math.min(K, 1 / eps))], [ax.Y(0), ax.Y(Math.min(1, K * eps))], hlc('eps', pal, pal.muted), 1.4, [5, 4]);
+    if (K * eps > 1) polyline(ctx, [ax.X(1 / eps), ax.X(K)], [ax.Y(1), ax.Y(1)], hlc('eps', pal, pal.muted), 1.4, [5, 4]);
+    polyline(ctx, ks.map(ax.X), run.map((s) => ax.Y(s.errA)), ca, 2);
+    polyline(ctx, ks.map(ax.X), run.map((s) => ax.Y(s.errB)), cb, 2);
     ctx.restore();
-    legend(ctx, { ...ax, B: ax.Y(0.3) }, [['bound k ε', hlc('eps', pal, pal.muted), [5, 4]], ['model A', ca], ['model B', cb]], false, true, pal.panel);
-    const kv = Math.ceil(1 / eps);
-    ro.innerHTML = `ε = <b>${eps}</b> · error at frame ${K}: model A <b>${f3(A.err[K])}</b>, model B <b>${f3(Bm.err[K])}</b> · the bound Σε<sub>k</sub> = ${f2(K * eps)} ${K * eps >= 1 ? `<b>is vacuous</b> from frame ${kv} on` : 'is not yet vacuous'}`;
+    legend(ctx, ax, [['bound k ε', hlc('eps', pal, pal.muted), [5, 4]], ['model A', ca], ['model B', cb]], true, false, pal.panel);
+    ro.innerHTML = `ε = <b>${eps}</b> · frame <b>${n}</b> · error of model A <b>${f3(last.errA)}</b>, of model B <b>${f3(last.errB)}</b> · the bound k ε = ${f2(n * eps)}${n * eps >= 1 ? ' <b>is vacuous</b>' : ''}`;
   }
   return { draw };
 }
@@ -186,89 +294,126 @@ function policyScene(viz) {
 }
 
 // ---------- Step 4: molecules and symmetry ----------
-const molRot = memo((which, th) => molPath(which, rot2(MZ0, th)));
 const deg = (r) => r * 180 / Math.PI;
+const G_AXIS = [1, 2, 0.5];
+// Plays t from 0 to 1 on its slider.
+function tPlayer(get, set, sl) {
+  const r = runner({ step: () => { set(Math.min(1, get() + 0.01)); sl.set(get()); }, done: () => get() >= 1, draw: () => {}, interval: 30 });
+  r.playing = false;
+  r.start = button('Play from t = 0', () => { set(0); sl.set(0); r.playing = true; r.kick(); });
+  return r;
+}
 function moleculeScene(viz) {
-  const c = makeCanvas(aspect(2), { maxH: 0.72 }), ro = readout();
-  let th = 2, t = 1, one = false;
-  viz.append(c.cv, controls(slider('th', { min: 0, max: 6.28, step: 0.02, value: th, fmt: (v) => `${Math.round(deg(v))}°` }, (v) => { th = v; draw(); }),
-    slider('t', { min: 0, max: 1, step: 0.02, value: t }, (v) => { t = v; draw(); }),
+  const c = makeCanvas(aspect(2), { maxH: 0.72 }), ro = readout(), view = { V: mm(axisRot([1, 0, 0], 0.5), axisRot([0, 1, 0], 0.4)) };
+  let th = 2, t = 1, one = false, mi = 0, models = null;
+  const pick = controls();
+  const ready = whenLoaded(loadStructures(), c, (d) => { models = d.molecules.map((m) => ({ name: m.name, cid: m.cid, M: moleculeModel(m) })); pick.append(...choice(models.map((m, i) => [i, m.name]), mi, (v) => { mi = v; draw(); })); draw(); });
+  const tSl = slider('t', { min: 0, max: 1, step: 0.01, value: t }, (v) => { t = v; draw(); }), r = tPlayer(() => t, (v) => { t = v; }, tSl);
+  viz.append(c.cv, pick, controls(slider('th', { min: 0, max: 6.28, step: 0.02, value: th, fmt: (v) => `${Math.round(deg(v))}°` }, (v) => { th = v; draw(); }), tSl, r.start,
     toggle('Train on one orientation', one, (v) => { one = v; draw(); })), ro,
-    note(`Exact. The molecule is water, three atoms in the plane with the centre fixed at the origin, so it has four coordinates. The data are the reference geometry at ${NROT} orientations, 1° apart, each with Gaussian noise of standard deviation ${MS} Å, and the noise is N(0, I) in the same four coordinates. The field is the exact velocity of this mixture, integrated with RK4 (${MSTEPS} steps). The toggle replaces the data by the single reference orientation. The histogram is over ${NM} noises.`));
+    note(`Exact. The conformers are PubChem's 3D structures (public domain), hydrogens included, centred at the origin. The data are one conformer m at a uniformly random rotation R with Gaussian noise of ${MS} Å per coordinate, and the noise x<sub>0</sub> is a centred Gaussian with ${MSIG} Å per coordinate. Given x<sub>t</sub>, the posterior over R is proportional to exp((t / v) tr(Rᵀ C)) with C = Σ<sub>i</sub> x<sub>t,i</sub> m<sub>i</sub>ᵀ; the field averages it over ${NQ} seeded rotations around its mode and is integrated with ${MSTEPS} steps. The toggle replaces the data by the single orientation R = I. Drag the molecule to turn the view.`));
+  dragRotate(c.cv, view, () => draw());
+  const flows = memo((M, one, th) => M.flow(M.noise(3).map((p) => mv(axisRot(G_AXIS, th), p)), one));
   function draw() {
     c.fit();
-    const { ctx, w, h } = c, pal = palette(), [P1, P2] = panels(w, h, 2), which = one ? 'one' : 'all';
-    const lim = 2.4, [x0, y0, pw, ph] = P1, s = Math.min(pw - 54, ph - 44), L = x0 + 44 + (pw - 54 - s) / 2, T = y0 + 30;
-    const X = (v) => L + s * (v + lim) / (2 * lim), Y = (v) => T + s * (lim - v) / (2 * lim);
-    ctx.strokeStyle = pal.line; ctx.lineWidth = 1; ctx.strokeRect(L + 0.5, T + 0.5, s, s);
-    label(ctx, `Two paths at t = ${f2(t)}`, L, T - 12, pal.fg, 12.5);
-    [-2, 0, 2].forEach((q) => { label(ctx, String(q), X(q), T + s + 14, pal.muted, 11, 'center'); label(ctx, String(q), L - 6, Y(q) + 4, pal.muted, 11, 'right'); });
-    label(ctx, 'Å', L + s, T + s + 26, pal.muted, 11.5, 'right');
-    const base = molPath(which, MZ0), cA = pathAt(molRot(`${which}${th}`, which, th), t), cB = rot2(pathAt(base, t), th);
-    const A = fromSub(cA), B = fromSub(cB), cPhi = hlc('Phi', pal, pal.ramp[2]), cG = hlc('g', pal, pal.ramp[0]);
-    const mol = (P, col, filled) => {
-      [1, 2].forEach((i) => { ctx.strokeStyle = col; ctx.lineWidth = filled ? 3 : 1.4; ctx.setLineDash(filled ? [] : [4, 3]); ctx.beginPath(); ctx.moveTo(X(P[0][0]), Y(P[0][1])); ctx.lineTo(X(P[i][0]), Y(P[i][1])); ctx.stroke(); ctx.setLineDash([]); });
-      P.forEach((p, i) => (filled ? dot : ring)(ctx, X(p[0]), Y(p[1]), i ? 6 : 9, col));
-    };
-    mol(A, cPhi, true);
-    mol(B, cG, false);
-    label(ctx, 'O', X(A[0][0]) + 12, Y(A[0][1]) - 8, cPhi, 11.5);
-    legend(ctx, { L, R: L + s, T, B: T + s }, [['flow of the rotated noise', cPhi], ['rotated flow of the noise', cG, [4, 3]]], true, true);
-    const ends = molEnds(which).map(deg), lo = -180, hi = 180, nb = 36, hs = hist(ends, lo, hi, nb), ymax = niceMax(1.2 * Math.max(...hs, 1 / nb));
-    const ax2 = axes(ctx, pal, P2, { xmin: lo, xmax: hi, ymin: 0, ymax, xt: [-180, -90, 0, 90, 180], xfmt: (q) => `${q}°`, yt: [0, ymax / 2, ymax], yfmt: (q) => (q ? q.toFixed(2) : '0'), xl: 'orientation of the generated molecule', title: `Orientations of ${NM} samples` });
-    ax2.ymax = ymax;
-    bars(ctx, ax2, hs, lo, hi, pal.ramp[1]);
-    hdash(ctx, pal.muted, ax2.L, ax2.R, ax2.Y(1 / nb), 1.2, [5, 4]);
-    legend(ctx, ax2, [['uniform', pal.muted, [5, 4]]], true);
-    const gap = equivGap(cA, pathAt(base, t), th), sd = Math.sqrt(ends.reduce((a, v) => a + v * v, 0) / ends.length);
-    ro.innerHTML = `rotation <b>${Math.round(deg(th))}°</b> · largest distance between the two paths' atoms: <b>${gap < 1e-3 ? gap.toExponential(1) : f3(gap)} Å</b> · spread of the orientations <b>${Math.round(sd)}°</b> (uniform ${Math.round(180 / Math.sqrt(3))}°)`;
+    const { ctx, w, h } = c, pal = palette();
+    if (!ready(pal)) return;
+    const [P1, P2] = panels(w, h, 2), { M, name } = models[mi], key = `${mi}${one}`;
+    const g = axisRot(G_AXIS, th), A = pathAtK(flows(`${key}|${th}`, M, one, th), t), B = pathAtK(flows(`${key}|0`, M, one, 0), t).map((p) => mv(g, p));
+    const [x0, y0, pw, ph] = P1, sc = Math.min(pw, ph - 50) / 11, cPhi = hlc('Phi', pal, pal.fg), cG = hlc('g', pal, pal.mark);
+    label(ctx, `${name}: two paths at t = ${f2(t)}`, x0 + 6, y0 + 18, pal.fg, 12.5);
+    drawMol(ctx, pal, A, M.el, M.bonds, view.V, x0 + pw / 2, y0 + 24 + (ph - 50) / 2, sc);
+    drawMol(ctx, pal, B, M.el, M.bonds, view.V, x0 + pw / 2, y0 + 24 + (ph - 50) / 2, sc, cG);
+    label(ctx, 'solid: flow of the rotated noise', x0 + 6, y0 + ph - 22, cPhi, 11.5);
+    label(ctx, 'dashed rings: rotated flow of the noise', x0 + 6, y0 + ph - 6, cG, 11.5);
+    // Right: samples at t = 1 in the same view.
+    const ends = M.ends(one), angs = ends.map((x) => deg(rotAngle(M.orient(x)))), [u0, v0, uw, uh] = P2;
+    const nc = 4, nr = 2, cw = uw / nc, chh = (uh - 30) / nr, rmax = Math.max(...M.m.map(len3)) + 1, s2 = Math.min(cw, chh - 16) / (2 * rmax);
+    label(ctx, `8 of ${NMOL} samples at t = 1, in the same view`, u0 + 6, v0 + 18, pal.fg, 12.5);
+    for (let i = 0; i < nc * nr; i++) {
+      const X = u0 + (i % nc + 0.5) * cw, Y = v0 + 26 + Math.floor(i / nc) * chh + (chh - 16) / 2;
+      drawMol(ctx, pal, ends[i], M.el, M.bonds, view.V, X, Y, s2);
+      label(ctx, `${Math.round(angs[i])}° from m`, X, Y + (chh - 16) / 2 + 12, pal.muted, 11, 'center');
+    }
+    let gap = 0; A.forEach((p, i) => { gap = Math.max(gap, len3(v3.sub(p, B[i]))); });
+    const mean = angs.reduce((a, b) => a + b, 0) / angs.length;
+    ro.innerHTML = `rotation g by <b>${Math.round(deg(th))}°</b> · largest distance between the two paths' atoms: <b>${gap < 1e-3 ? gap.toExponential(1) : f3(gap)} Å</b> · mean rotation of the ${NMOL} samples from the conformer: <b>${Math.round(mean)}°</b> (uniform rotations: 126°)`;
   }
-  return { draw };
+  return { draw, active: (on) => r.setActive(on) };
 }
 
 // ---------- Step 5: protein frames ----------
+const SSW = { H: 1.2, E: 1.4, C: 0.3 };
+const unit = (a) => v3.scl(a, 1 / len3(a));
+const cr = (a, b, c, d, u) => b.map((_, k) => 0.5 * (2 * b[k] + (c[k] - a[k]) * u + (2 * a[k] - 5 * b[k] + 4 * c[k] - d[k]) * u * u + (3 * b[k] - a[k] - 3 * c[k] + d[k]) * u * u * u));
+// Cartoon of the Cα trace: a Catmull-Rom ribbon whose width follows the secondary structure of the
+// target and lies across the local curvature, shaded by how much each piece faces the viewer.
+function ribbon(ctx, pal, CA, ss, V, cx, cy, sc) {
+  const n = CA.length, p = CA.map((x) => mv(V, x));
+  const side = p.map((x, i) => { const a = p[Math.max(0, i - 1)], b = p[Math.min(n - 1, i + 1)], s = v3.cross(v3.sub(b, a), v3.sub(v3.scl(v3.add(a, b), 0.5), x)); return len3(s) > 1e-6 ? unit(s) : null; });
+  for (let i = 1; i < n; i++) side[i] ??= side[i - 1];
+  for (let i = n - 2; i >= 0; i--) side[i] ??= side[i + 1];
+  for (let i = 1; i < n; i++) if (side[i] && side[i - 1] && v3.dot(side[i], side[i - 1]) < 0) side[i] = v3.scl(side[i], -1);
+  const base = { H: hexRGB(pal.ramp[1]), E: hexRGB(pal.ramp[3]), C: hexRGB(pal.ramp[0]) }, S = 8, pts = [];
+  for (let i = 0; i < n - 1; i++) for (let k = 0; k < S + (i === n - 2); k++) {
+    const u = k / S, s = unit(v3.add(v3.scl(side[i] ?? [0, 1, 0], 1 - u), v3.scl(side[i + 1] ?? [0, 1, 0], u)));
+    pts.push({ x: cr(p[Math.max(0, i - 1)], p[i], p[i + 1], p[Math.min(n - 1, i + 2)], u), s, hw: (1 - u) * SSW[ss[i]] + u * SSW[ss[i + 1]], c: ss[u < 0.5 ? i : i + 1] });
+  }
+  const quads = [];
+  for (let j = 0; j + 1 < pts.length; j++) {
+    const a = pts[j], b = pts[j + 1], nz = Math.abs(unit(v3.cross(v3.sub(b.x, a.x), a.s))[2] || 0);
+    const cs = [v3.add(a.x, v3.scl(a.s, a.hw)), v3.add(b.x, v3.scl(b.s, b.hw)), v3.sub(b.x, v3.scl(b.s, b.hw)), v3.sub(a.x, v3.scl(a.s, a.hw))];
+    quads.push([(a.x[2] + b.x[2]) / 2, cs, mixRGB(base[a.c], [0, 0, 0], 0.55 * (1 - nz))]);
+  }
+  quads.sort((a, b) => a[0] - b[0]).forEach(([, cs, col]) => {
+    ctx.beginPath(); cs.forEach((q, i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, cx + sc * q[0], cy - sc * q[1])); ctx.closePath();
+    ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.stroke();
+  });
+}
 function proteinScene(viz) {
-  const c = makeCanvas(aspect(2), { maxH: 0.72 }), ro = readout();
-  let t = 0.5, az = 0.6, linear = false;
-  viz.append(c.cv, controls(slider('t', { min: 0, max: 1, step: 0.02, value: t }, (v) => { t = v; draw(); }),
-    slider('az', { min: 0, max: 6.28, step: 0.02, value: az, fmt: (v) => `${Math.round(deg(v))}°` }, (v) => { az = v; draw(); }),
-    toggle('Move the atoms on straight lines', linear, (v) => { linear = v; draw(); })), ro,
-    note(`Exact paths. The target is an ideal α-helix of ${NR} residues (radius 2.3 Å, rise 1.5 Å, 100° per residue). The noise draws the Cα positions from a centred Gaussian with a standard deviation of 4 Å and the rotations uniformly from SO(3). Each residue's N, Cα and C atoms sit at fixed coordinates in its frame. On the frame path the Cα positions move on straight lines and the rotations on SO(3) geodesics; the toggle moves the three atoms of every residue on straight lines instead.`));
-  // View: rotate about the helix axis z by az, then draw z to the right and the rotated y upward.
-  const view = (p) => { const C = Math.cos(az), S = Math.sin(az); return [p[2], S * p[0] + C * p[1], C * p[0] - S * p[1]]; };
+  const c = makeCanvas(aspect(2), { maxH: 0.72 }), ro = readout(), view = { V: axisRot([1, 0, 0], -0.3) };
+  let t = 1, linear = false, pi = 0, models = null;
+  const pick = controls();
+  const ready = whenLoaded(loadStructures(), c, (d) => { models = d.proteins.map((p) => ({ id: p.id, name: p.name, M: proteinModel(p) })); pick.append(...choice(models.map((m, i) => [i, `${m.name} (${m.id})`]), pi, (v) => { pi = v; draw(); })); draw(); });
+  const tSl = slider('t', { min: 0, max: 1, step: 0.01, value: t }, (v) => { t = v; draw(); }), r = tPlayer(() => t, (v) => { t = v; }, tSl);
+  viz.append(c.cv, pick, controls(tSl, r.start, toggle('Move the atoms on straight lines', linear, (v) => { linear = v; draw(); })), ro,
+    note(`Exact paths. The targets are the backbones (N, Cα and C atoms) of three PDB entries (CC0), with the secondary structure from the files. The noise draws the Cα positions from a centred Gaussian with the protein's radius of gyration and the rotations uniformly from SO(3). Each residue's N and C atoms sit at fixed coordinates in its frame. On the frame path the Cα positions move on straight lines and the rotations on SO(3) geodesics; the toggle moves all three atoms of every residue on straight lines instead. The ribbon is drawn through the Cα positions at time t. Drag it to turn the view.`));
+  dragRotate(c.cv, view, () => draw());
   function draw() {
     c.fit();
-    const { ctx, w, h } = c, pal = palette(), [P1, P2] = panels(w, h, 2);
-    const [x0, y0, pw, ph] = P1, cx = x0 + pw / 2, cy = y0 + 16 + (ph - 16) / 2, sc = Math.min(pw / 20, (ph - 40) / 18);
-    label(ctx, `Backbone at t = ${f2(t)}`, x0 + 10, y0 + 18, pal.fg, 12.5);
-    const P = (p) => { const v = view(p); return [cx + sc * v[0], cy - sc * v[1], v[2]]; };
-    // Target trace, faint.
-    polyline(ctx, CA1.map((p) => P(p)[0]), CA1.map((p) => P(p)[1]), pal.faint, 6);
-    const bb = backbone(t, linear), cR = hlc('R', pal, pal.ramp[1]), cX = hlc('xi', pal, pal.ramp[0]);
-    polyline(ctx, bb.map((r) => P(r[1])[0]), bb.map((r) => P(r[1])[1]), pal.muted, 1, [3, 4]);
-    const order = bb.map((r, i) => [P(r[1])[2], i]).sort((a, b) => a[0] - b[0]);
-    order.forEach(([, i]) => {
-      const [n, ca, cc] = bb[i].map(P), err = bondErr([bb[i]]), col = err > 0.02 ? pal.bad : cR;
-      [n, cc].forEach((q) => { ctx.strokeStyle = col; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(ca[0], ca[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); });
-      dot(ctx, n[0], n[1], 3, col); dot(ctx, cc[0], cc[1], 3, col); dot(ctx, ca[0], ca[1], 4.2, cX);
-      if (i === RSHOW) ring(ctx, ca[0], ca[1], 8, pal.fg, 1.2);
+    const { ctx, w, h } = c, pal = palette();
+    if (!ready(pal)) return;
+    const [P1, P2] = panels(w, h, 2), { M, id, name } = models[pi], st = M.at(t, linear), V = view.V;
+    const [x0, y0, pw, ph] = P1, cx = x0 + pw / 2, cy = y0 + 22 + (ph - 22) / 2, sc = Math.min(pw, ph - 30) / (3.4 * M.rg);
+    label(ctx, `${name} (${id}) at t = ${f2(t)}`, x0 + 6, y0 + 18, pal.fg, 12.5);
+    const P = (q) => { const v = mv(V, q); return [cx + sc * v[0], cy - sc * v[1]]; };
+    const tr = M.CA1.map(P);
+    polyline(ctx, tr.map((q) => q[0]), tr.map((q) => q[1]), pal.faint, 5);
+    ribbon(ctx, pal, st.atoms.map((r) => r[1]), M.ss, V, cx, cy, sc);
+    const errs = M.bondErrs(st.atoms), cR = hlc('R', pal, pal.fg);
+    st.atoms.forEach(([N, CA, C], i) => {
+      const [a, b, d] = [N, CA, C].map(P), col = errs[i] > 0.02 ? pal.bad : cR;
+      ctx.globalAlpha = errs[i] > 0.02 ? 0.9 : 0.35; ctx.strokeStyle = col; ctx.lineWidth = errs[i] > 0.02 ? 1.6 : 1.1;
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(d[0], d[1]); ctx.stroke(); ctx.globalAlpha = 1;
+      if (i === M.show) ring(ctx, b[0], b[1], 8, pal.mark, 1.6);
     });
-    // One residue's rotation: geodesic, naive matrix average, target.
-    const [u0, v0, uw, uh] = P2, ux = u0 + uw / 2, uy = v0 + 16 + (uh - 16) / 2, us = Math.min(uw, uh - 40) * 0.36;
-    label(ctx, `Rotation of residue ${RSHOW + 1} (ringed), θ = ${Math.round(deg(ANG[RSHOW]))}°`, u0 + 10, v0 + 18, pal.fg, 12.5);
-    const nv = naiveRot(RSHOW, t), R1 = qmat(Q1[RSHOW]), Rt = qmat(slerp(Q0[RSHOW], Q1[RSHOW], t));
-    const Q = (p) => { const v = view(p); return [ux + us * v[0], uy - us * v[1]]; };
+    label(ctx, 'helix', x0 + 6, y0 + ph - 6, pal.ramp[1], 11.5); label(ctx, 'strand', x0 + 46, y0 + ph - 6, pal.ramp[3], 11.5); label(ctx, 'coil', x0 + 96, y0 + ph - 6, pal.ramp[0], 11.5);
+    label(ctx, 'faint: target Cα trace', x0 + pw - 6, y0 + ph - 6, pal.muted, 11.5, 'right');
+    // One residue's rotation: geodesic, naive matrix average, target. Rows of mt(R) are the frame axes.
+    const i = M.show, [u0, v0, uw, uh] = P2, ux = u0 + uw / 2, uy = v0 + 16 + (uh - 16) / 2, us = Math.min(uw, uh - 40) * 0.36;
+    label(ctx, `Rotation of residue ${i + 1} (ringed), θ = ${Math.round(deg(M.ang[i]))}°`, u0 + 6, v0 + 18, pal.fg, 12.5);
+    const nv = M.naive(i, t), Rt = qmat(slerp(M.Q0[i], M.Q1[i], t));
+    const Q = (e) => { const v = mv(V, e); return [ux + us * v[0], uy - us * v[1]]; };
     const axc = [pal.ramp[0], pal.ramp[1], pal.ramp[2]];
     ring(ctx, ux, uy, us, pal.faint, 1);
-    R1.forEach((e, j) => { const q = Q(e); ctx.strokeStyle = axc[j]; ctx.globalAlpha = 0.35; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(ux, uy); ctx.lineTo(q[0], q[1]); ctx.stroke(); ctx.globalAlpha = 1; });
-    nv.M.forEach((e, j) => { const q = Q(e); ctx.strokeStyle = axc[j]; ctx.lineWidth = 1.6; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(ux, uy); ctx.lineTo(q[0], q[1]); ctx.stroke(); ctx.setLineDash([]); });
-    Rt.forEach((e, j) => { const q = Q(e); ctx.strokeStyle = hlc('R', pal, axc[j]); ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(ux, uy); ctx.lineTo(q[0], q[1]); ctx.stroke(); dot(ctx, q[0], q[1], 3.5, hlc('R', pal, axc[j])); });
-    const lb = { L: u0 + 4, R: u0 + uw, T: v0 + 30, B: v0 + uh - 4 };
-    legend(ctx, lb, [['geodesic R_t', pal.fg], ['(1 − t) R_0 + t R_1', pal.fg, [4, 3]], ['target R_1', pal.muted]], true, true);
-    const e = bondErr(bb), th = ANG[RSHOW];
-    ro.innerHTML = `t = <b>${f2(t)}</b> · largest bond-length error: <b>${e < 1e-6 ? '0' : pct(e)}</b> ${linear ? '(straight atoms)' : '(frames)'} · Cα RMSD to the target <b>${f2(rmsd(bb))} Å</b><br>residue ${RSHOW + 1}: angle left to turn (1 − t)θ = <b>${Math.round(deg((1 - t) * th))}°</b>, ‖Ω‖<sub>F</sub> = √2 θ = <b>${f2(Math.SQRT2 * th)}</b> · naive average: det <b>${f2(nv.det)}</b>, ‖MᵀM − I‖<sub>F</sub> <b>${f2(nv.orth)}</b>`;
+    mt(M.R1[i]).forEach((e, j) => { const q = Q(e); ctx.strokeStyle = axc[j]; ctx.globalAlpha = 0.35; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(ux, uy); ctx.lineTo(q[0], q[1]); ctx.stroke(); ctx.globalAlpha = 1; });
+    mt(nv.M).forEach((e, j) => { const q = Q(e); ctx.strokeStyle = axc[j]; ctx.lineWidth = 1.6; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(ux, uy); ctx.lineTo(q[0], q[1]); ctx.stroke(); ctx.setLineDash([]); });
+    mt(Rt).forEach((e, j) => { const q = Q(e), col = hlc('R', pal, axc[j]); ctx.strokeStyle = col; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(ux, uy); ctx.lineTo(q[0], q[1]); ctx.stroke(); dot(ctx, q[0], q[1], 3.5, col); });
+    legend(ctx, { L: u0 + 4, R: u0 + uw, T: v0 + 30, B: v0 + uh - 4 }, [['geodesic R_t', pal.fg], ['(1 − t) R_0 + t R_1', pal.fg, [4, 3]], ['target R_1', pal.muted]], true, true);
+    const e = Math.max(...errs), th = M.ang[i];
+    ro.innerHTML = `t = <b>${f2(t)}</b> · largest bond-length error: <b>${e < 1e-6 ? '0' : pct(e)}</b> ${linear ? '(straight atoms)' : '(frames)'} · Cα RMSD to the target <b>${f2(M.rmsd(st.atoms))} Å</b><br>residue ${i + 1}: angle left to turn (1 − t)θ = <b>${Math.round(deg((1 - t) * th))}°</b>, ‖Ω‖<sub>F</sub> = √2 θ = <b>${f2(Math.SQRT2 * th)}</b> · naive average: det <b>${f2(nv.det)}</b>, ‖MᵀM − I‖<sub>F</sub> <b>${f2(nv.orth)}</b>`;
   }
-  return { draw };
+  return { draw, active: (on) => r.setActive(on) };
 }
 
 // ---------- Step 6: weather and the CRPS ----------
