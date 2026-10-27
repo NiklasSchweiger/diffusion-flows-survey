@@ -25,6 +25,86 @@ export const redrawAll = () => live.scenes.forEach((s) => s.active && s.scene.dr
 export const S = (id, tex) => `\\class{sym-${id}}{${tex ?? live.symbols[id].tex}}`;
 export const CHG = (tex) => `\\class{chg}{${tex}}`;   // the part of a derivation line that changed
 
+// Derivations are long and not every symbol in them is written with S(). autoSym wraps every
+// glossary symbol that is still bare, so all of them can be hovered. It matches the exact tex of a
+// symbol, longest first, and a symbol with a one-letter index also matches a shifted index
+// (\bar\alpha_t matches \bar\alpha_{t-1}). It leaves alone sub- and superscripts, text, symbols
+// already wrapped, and anything under an accent such as \hat or \tilde, which is a different symbol.
+// A one-letter symbol is skipped inside a word, after a command and when it carries an index or prime.
+const VERBATIM = new Set(['text', 'mathrm', 'operatorname', 'textrm', 'textit', 'textbf', 'mbox', 'mathbb', 'mathcal', 'begin', 'end', 'label', 'tag', 'href']);
+const ACCENT = /\\(?:hat|tilde|bar|bm|mathbf|vec|dot|ddot|overline|widehat|widetilde|boldsymbol)\s*$/;
+let symPats = null;
+function buildSymPats() {
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const ent = Object.entries(live.symbols).filter(([, s]) => s.tex).sort((a, b) => b[1].tex.length - a[1].tex.length);
+  const exact = ent.map(([id, s]) => ({ id, tex: s.tex, letter: /^[A-Za-z*]$/.test(s.tex) }));
+  const shifted = ent.flatMap(([id, s]) => {
+    const m = /^(.+)_\{?([A-Za-z])\}?$/.exec(s.tex);
+    return m ? [{ id, re: new RegExp(`^${esc(m[1])}_\\{${m[2]}\\s*[-+][^{}]*\\}`) }] : [];
+  });
+  symPats = { exact, shifted };
+}
+// Index just past the brace group that opens at i (tex[i] === '{').
+function groupEnd(tex, i) {
+  for (let depth = 0; i < tex.length; i++) {
+    if (tex[i] === '\\') { i++; continue; }
+    if (tex[i] === '{') depth++;
+    else if (tex[i] === '}' && --depth === 0) return i + 1;
+  }
+  return tex.length;
+}
+// Index just past one TeX token or group starting at i.
+function tokenEnd(tex, i) {
+  while (tex[i] === ' ') i++;
+  if (tex[i] === '{') return groupEnd(tex, i);
+  if (tex[i] === '\\') { const m = /^\\([A-Za-z]+|.)/.exec(tex.slice(i)); return i + m[0].length; }
+  return i + 1;
+}
+export function autoSym(tex) {
+  if (!tex) return tex;
+  if (!symPats) buildSymPats();
+  let out = '', i = 0;
+  const isL = (c) => !!c && /[A-Za-z]/.test(c);
+  while (i < tex.length) {
+    const c = tex[i];
+    if (c === '_' || c === '^') { const e = tokenEnd(tex, i + 1); out += tex.slice(i, e); i = e; continue; }
+    if (!ACCENT.test(out)) {
+      let hit = null;
+      for (const p of symPats.exact) {
+        if (!tex.startsWith(p.tex, i)) continue;
+        const after = tex[i + p.tex.length];
+        if (isL(p.tex.at(-1)) && isL(after)) continue;          // \theta inside \thetas, t inside tx
+        if (p.letter && (isL(tex[i - 1]) || /\\[A-Za-z]+\s*$/.test(out))) continue;   // a letter of a word or a command argument
+        if (p.letter && /^(?:[_^']|\\prime)/.test(tex.slice(i + 1))) continue;     // P_0, p_\theta, t': usually another object
+        hit = { id: p.id, len: p.tex.length }; break;
+      }
+      if (!hit) for (const p of symPats.shifted) {
+        const m = p.re.exec(tex.slice(i));
+        if (m) { hit = { id: p.id, len: m[0].length }; break; }
+      }
+      // Braced, because the symbol may be a command argument, as in \frac1M.
+      if (hit) { out += `{\\class{sym-${hit.id}}{${tex.slice(i, i + hit.len)}}}`; i += hit.len; continue; }
+    }
+    if (c === '\\') {
+      const name = /^\\([A-Za-z]+|.)/.exec(tex.slice(i))[1];
+      let e = i + 1 + name.length;
+      if (name === 'class') {
+        const a = groupEnd(tex, e);
+        if (tex.slice(e, a).startsWith('{sym-')) e = groupEnd(tex, a);   // already a symbol: copy it whole
+        else e = a;                                                      // \class{chg}: the content is processed
+      } else if (VERBATIM.has(name)) {
+        while (tex[e] === ' ' || tex[e] === '*') e++;
+        if (tex[e] === '{') e = groupEnd(tex, e);
+      }
+      out += tex.slice(i, e); i = e; continue;
+    }
+    out += c; i++;
+  }
+  return out;
+}
+// The same for the inline math \( ... \) of an HTML string.
+const autoSymHTML = (html) => (html || '').replace(/\\\(([\s\S]*?)\\\)/g, (m, t) => `\\(${autoSym(t)}\\)`);
+
 // ---------- Canvas helpers ----------
 export function makeCanvas(aspect, { maxH = 0.62 } = {}) {
   const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
@@ -177,15 +257,15 @@ function stepText(st, i, n) {
   return el;
 }
 function derivation(d, stepTex) {
-  const goal = d.goal === 'step' ? stepTex : d.goal;   // 'step': the goal is the formula of the step
+  const goal = autoSym(d.goal === 'step' ? stepTex : d.goal);   // 'step': the goal is the formula of the step
   const box = document.createElement('div');
   box.className = 'deriv';
   box.innerHTML = `<div class="head">${d.title ?? 'Derivation'} <span class="spacer"></span><button class="btn back" type="button">Back</button><button class="btn next" type="button">Next line</button></div>`;
   // The task stays visible above the lines: what we start from, what we want to show and how.
   if (goal) box.querySelector('.head').insertAdjacentHTML('afterend', `<div class="task">
-    ${d.have?.length ? `<div class="tl">We have</div><ul class="have">${d.have.map((h) => `<li>${glue(h)}</li>`).join('')}</ul>` : ''}
+    ${d.have?.length ? `<div class="tl">We have</div><ul class="have">${d.have.map((h) => `<li>${glue(autoSymHTML(h))}</li>`).join('')}</ul>` : ''}
     <div class="tl">We want to show</div><div class="goal">\\[${goal}\\]</div>
-    ${d.plan ? `<div class="tl">Plan</div><div><button class="tipbtn planbtn" type="button" aria-expanded="false">Show plan</button><p class="plan" hidden>${glue(d.plan)}</p></div>` : ''}</div>`);
+    ${d.plan ? `<div class="tl">Plan</div><div><button class="tipbtn planbtn" type="button" aria-expanded="false">Show plan</button><p class="plan" hidden>${glue(autoSymHTML(d.plan))}</p></div>` : ''}</div>`);
   // The plan gives the strategy away, so it stays closed until the reader asks for it.
   box.querySelector('.planbtn')?.addEventListener('click', (e) => {
     const b = e.currentTarget, p = b.nextElementSibling, open = p.hidden;
@@ -196,7 +276,7 @@ function derivation(d, stepTex) {
     r.className = 'line' + (i ? ' hidden' : '');
     // Lines that use a rule or an earlier result get a hint, closed until the reader asks for it.
     const hint = l.uses?.length ? `<button class="tipbtn" type="button" aria-expanded="false">Hint</button>` : '';
-    r.innerHTML = `<div>\\[${l.tex}\\]</div><div class="why">${glue(l.why)} ${hint}</div>${l.uses?.length ? `<div class="tips" hidden>${l.uses.map(tip).join('')}</div>` : ''}`;
+    r.innerHTML = `<div>\\[${autoSym(l.tex)}\\]</div><div class="why">${glue(autoSymHTML(l.why))} ${hint}</div>${l.uses?.length ? `<div class="tips" hidden>${l.uses.map(tip).join('')}</div>` : ''}`;
     r.querySelector('.tipbtn')?.addEventListener('click', (e) => {
       const b = e.currentTarget, t = r.querySelector('.tips'), open = t.hidden;
       t.hidden = !open; b.setAttribute('aria-expanded', open); b.textContent = open ? 'Hide hint' : 'Hint';
@@ -334,6 +414,7 @@ export function wireSymbols(root) {
 // ---------- Mount ----------
 export async function mount({ symbols, steps, scenes, intro }) {
   live.symbols = symbols;
+  symPats = null;
   const root = document.documentElement;
   try { const t = localStorage.getItem('survey-theme'); if (t === 'light' || t === 'dark') root.dataset.theme = t; } catch {}
   live.theme = root.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
