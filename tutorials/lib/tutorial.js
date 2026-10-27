@@ -161,14 +161,16 @@ export function runner({ step, done, draw, interval = 40, perFrame = 1 }) {
 }
 
 // ---------- Step text, derivations and checks ----------
+// A paragraph of prose; an item that starts with a tag, such as a table, is inserted as it is.
+const para = (p) => (p.startsWith('<') ? p : `<p>${p}</p>`);
 function stepText(st, i, n) {
   const el = document.createElement('section');
   el.className = 'step'; el.dataset.step = i; el.id = st.id;
   el.innerHTML = `<div class="kicker">Step ${i + 1} of ${n} · ${st.kicker}</div><h2>${st.title}</h2>
-    <div class="prose">${st.prose.map((p) => `<p>${p}</p>`).join('')}</div>
+    <div class="prose">${st.prose.map(para).join('')}</div>
     <div class="formula">\\[${st.tex}\\]</div>
     <div class="hint">Hover or tap a symbol to see what it is and where it is in the plot.</div>
-    ${st.after ? `<div class="prose">${st.after.map((p) => `<p>${p}</p>`).join('')}</div>` : ''}`;
+    ${st.after ? `<div class="prose">${st.after.map(para).join('')}</div>` : ''}`;
   if (st.deriv) el.append(derivation(st.deriv, st.tex));
   for (const c of [].concat(st.check ?? [])) el.append(check(c));
   if (st.closing) el.insertAdjacentHTML('beforeend', `<div class="closing">${st.closing}</div>`);

@@ -191,7 +191,7 @@ function cond(viz) {
   return { draw };
 }
 
-// ---------- Step 4: regression on the noisy target ----------
+// ---------- Step 5: regression on the noisy target ----------
 function dsm(viz) {
   const c = makeCanvas(16 / 10), ro = readout();
   let t = 0.5, probe = 0.6;
@@ -243,12 +243,12 @@ function dsm(viz) {
     label(ctx, 'solid: ∇log p_t(x)', R, bot + 20, hlc(['ms', 'EY'], pal, pal.acc), 13, 'right');
     label(ctx, 'circles: bin means of the labels', L, bot + 20, hlc('EY', pal, pal.ramp[3]), 13);
     ro.innerHTML = `t = <b>${t.toFixed(2)}</b> · σ<sub>t</sub> = <b>${s.toFixed(2)}</b> · probe x = <b>${probe.toFixed(2)}</b>, ∇log p<sub>t</sub>(x) = <b>${scoret1(probe, t).toFixed(2)}</b><br>` +
-      `J<sub>DSM</sub> of f = 0: <b>${l0.toFixed(3)}</b> · J<sub>DSM</sub> of the exact score: <b>${lS.toFixed(3)}</b> · their difference <b>${(l0 - lS).toFixed(3)}</b> ≈ E‖∇log p<sub>t</sub>‖²/2 = <b>${sq.toFixed(3)}</b>`;
+      `J<sub>DSM</sub> of the exact score: <b>${lS.toFixed(3)}</b> · J<sub>DSM</sub> of f = 0: <b>${l0.toFixed(3)}</b> · difference <b>${(l0 - lS).toFixed(3)}</b> ≈ J<sub>ESM</sub> of f = 0, E‖∇log p<sub>t</sub>‖²/2 = <b>${sq.toFixed(3)}</b>`;
   }
   return { draw };
 }
 
-// ---------- Step 5: the marginal score as a posterior average ----------
+// ---------- Step 4: the marginal score as a posterior average ----------
 function marginal(viz) {
   const c = makeCanvas(4 / 3), ro = readout();
   let t = 0.45, probe = [-0.75, -0.05];
@@ -283,13 +283,14 @@ function marginal(viz) {
 }
 
 // ---------- Step 6: Tweedie's formula ----------
+// Mean squared distance of the data points of the pairs from the data mean.
+const SPREAD2 = Array.from({ length: PAIRS2.n }, (_, i) => (PAIRS2.x1[2 * i] - DATA_MEAN[0]) ** 2 + (PAIRS2.x1[2 * i + 1] - DATA_MEAN[1]) ** 2).reduce((a, b) => a + b, 0) / PAIRS2.n;
 function tweedie(viz) {
   const c = makeCanvas(4 / 3), ro = readout();
-  let t = 0.5, probe = null;
+  let t = 0.5, probe = [-1.9, 0.8];
   track(c, (p) => { probe = p; draw(); });
-  c.cv.addEventListener('pointerleave', () => { probe = null; draw(); });
   viz.append(c.cv, controls(tSlider(t, (x) => { t = x; draw(); }, 0.02, 0.98)), ro,
-    note(`${PAIRS2.n} fixed pairs. Open circles are the noisy points x<sub>t</sub>, filled dots their denoised positions E[x<sub>1</sub> | x<sub>t</sub>], coloured by the component that produced x<sub>1</sub>. The heat map is the data density p, the cross the data mean.`));
+    note(`Move the cursor to place the probe x. ${PAIRS2.n} fixed pairs: open circles are the noisy points x<sub>t</sub>, filled dots their denoised positions E[x<sub>1</sub> | x<sub>t</sub>], coloured by the component that produced x<sub>1</sub>. The heat map is the data density p, the bold cross the data mean and the small cross the origin.`));
   function draw() {
     c.fit();
     const { ctx, w, h } = c, pal = palette(), v = view(0, 0, w, h), a = alpha(t), s = sigma(t);
@@ -306,21 +307,23 @@ function tweedie(viz) {
     ctx.globalAlpha = 1;
     for (let i = 0; i < n; i++) { const [X1, Y1] = v.px(...d1[i]); dot(ctx, X1, Y1, isHL('Ex1') ? 3.4 : 2.6, hlc('Ex1', pal, modeColor(pal, PAIRS2.k[i]))); }
     const [Mx, My] = v.px(...DATA_MEAN); cross(ctx, Mx, My, 7, pal.fg, 2.4);
-    let pr = '';
-    if (probe) {
-      // The two terms of the formula at the probe: x + sigma^2 score, then the division by alpha.
-      const f = fields2(...probe, t), step = [s * s * f.score[0], s * s * f.score[1]], mid = [probe[0] + step[0], probe[1] + step[1]];
-      const [X, Y] = v.px(...probe), [Xm, Ym] = v.px(...mid), [Xd, Yd] = v.px(...f.d1);
-      arrow(ctx, X, Y, Xm, Ym, hlc(['ms', 'sig'], pal, pal.acc), 2.8, 10);
-      ctx.setLineDash([4, 4]); arrow(ctx, Xm, Ym, Xd, Yd, hlc('alpha', pal, pal.acc2), 2, 9); ctx.setLineDash([]);
-      dot(ctx, X, Y, 5.5, hlc('x', pal, pal.fg)); dot(ctx, Xd, Yd, 6, hlc('Ex1', pal, pal.ramp[2]));
-      tag(ctx, pal, 'σ_t² ∇log p_t', (X + Xm) / 2 + 10, (Y + Ym) / 2 - 8, hlc(['ms', 'sig'], pal, pal.acc), 12.5);
-      tag(ctx, pal, '÷ α_t', (Xm + Xd) / 2 + 10, (Ym + Yd) / 2 + 16, hlc('alpha', pal, pal.acc2), 12.5);
-      pr = `x = <b>${fmt2(probe)}</b> · σ<sub>t</sub>²∇log p<sub>t</sub>(x) = <b>${fmt2(step)}</b> · x + σ<sub>t</sub>²∇log p<sub>t</sub> = <b>${fmt2(mid)}</b> · ÷ α<sub>t</sub> = <b>${fmt2(f.d1)}</b><br>`;
-    }
+    // The two moves of the formula at the probe: the step by sigma^2 times the score lands at
+    // alpha E[x1 | x]; the division by alpha moves it away from the origin along the dotted ray.
+    const f = fields2(...probe, t), step = [s * s * f.score[0], s * s * f.score[1]], mid = [probe[0] + step[0], probe[1] + step[1]];
+    const [X, Y] = v.px(...probe), [Xm, Ym] = v.px(...mid), [Xd, Yd] = v.px(...f.d1), [O0, O1] = v.px(0, 0);
+    cross(ctx, O0, O1, 4, pal.muted, 1.2);
+    ctx.setLineDash([2, 4]); ctx.strokeStyle = hlc('alpha', pal, pal.acc2); ctx.lineWidth = isHL('alpha') ? 2.4 : 1.4;
+    ctx.beginPath(); ctx.moveTo(O0, O1); ctx.lineTo(Xm, Ym); ctx.stroke(); ctx.setLineDash([]);
+    arrow(ctx, Xm, Ym, Xd, Yd, hlc('alpha', pal, pal.acc2), 2.2, 9);
+    arrow(ctx, X, Y, Xm, Ym, hlc(['ms', 'sig'], pal, pal.acc), 2.8, 10);
+    dot(ctx, X, Y, 5.5, hlc('x', pal, pal.fg)); dot(ctx, Xm, Ym, 4, hlc('alpha', pal, pal.acc2)); dot(ctx, Xd, Yd, 6, hlc('Ex1', pal, pal.ramp[2]));
+    tag(ctx, pal, 'x', X - 10, Y - 10, hlc('x', pal, pal.fg), 14, 'right');
+    tag(ctx, pal, '1. add σ_t² ∇log p_t(x)', (X + Xm) / 2 + 10, (Y + Ym) / 2 - 8, hlc(['ms', 'sig'], pal, pal.acc), 12.5);
+    tag(ctx, pal, '2. divide by α_t', Xd + 10, Yd + 18, hlc('alpha', pal, pal.acc2), 12.5);
+    const pr = `x = <b>${fmt2(probe)}</b> · σ<sub>t</sub>²∇log p<sub>t</sub>(x) = <b>${fmt2(step)}</b> · x + σ<sub>t</sub>²∇log p<sub>t</sub>(x) = α<sub>t</sub>E[x<sub>1</sub> | x] = <b>${fmt2(mid)}</b> · divided by α<sub>t</sub>: E[x<sub>1</sub> | x] = <b>${fmt2(f.d1)}</b><br>`;
     tag(ctx, pal, `t = ${t.toFixed(2)}, α_t = ${a.toFixed(2)}, σ_t = ${s.toFixed(2)}`, w - 12, 22, hlc(['t', 'alpha', 'sig'], pal, pal.muted), 13.5, 'right');
     let sp = 0; for (const [x, y] of d1) sp += ((x - DATA_MEAN[0]) ** 2 + (y - DATA_MEAN[1]) ** 2) / n;
-    ro.innerHTML = pr + `t = <b>${t.toFixed(2)}</b> · mean distance² of the denoised points from the data mean: <b>${sp.toFixed(2)}</b>`;
+    ro.innerHTML = pr + `t = <b>${t.toFixed(2)}</b> · spread of the denoised points around the data mean, as a fraction of the spread of the data: <b>${(sp / SPREAD2).toFixed(2)}</b> (1 at t = 1, 0 at t = 0)`;
   }
   return { draw };
 }
@@ -329,32 +332,37 @@ function tweedie(viz) {
 function targets(viz) {
   const c = makeCanvas(16 / 10, { maxH: 0.42 }), c1 = makeCanvas(16 / 6, { maxH: 0.22 }), ro = readout();
   let t = 0.5, probe = [-1.3, 0.6];
-  track(c, (p) => { probe = p; draw(); }, () => view(0, 0, c.w, c.h, 1.75, 1.05));
+  const BX = 2.4, BY = 1.5;
+  track(c, (p) => { probe = p; draw(); }, () => view(0, 0, c.w, c.h, BX, BY));
   viz.append(c.cv, c1.cv, controls(tSlider(t, (x) => { t = x; draw(); }, 0.05, 0.95)), ro,
-    note('Exact posterior means of the 2D mixture. The parallelogram is drawn from the origin.'));
+    note('Move the cursor to place the probe x. Exact posterior means of the 2D mixture; the heat map is p<sub>t</sub> and the small cross the origin. Lower plot: the factor by which each loss multiplies an error ‖x̂<sub>1</sub> − x<sub>1</sub>‖² in the data prediction, against t. The dashed line marks the current t.'));
   function draw() {
     c.fit(); c1.fit();
     const pal = palette(), a = alpha(t), s = sigma(t), f = fields2(...probe, t);
-    { const { ctx, w, h } = c, v = view(0, 0, w, h, 1.75, 1.05);
+    { const { ctx, w, h } = c, v = view(0, 0, w, h, BX, BY);
       heatT(ctx, w, h, v, t, 0.6);
-      const O = v.px(0, 0), A = v.px(a * f.d1[0], a * f.d1[1]), B = v.px(s * f.d0[0], s * f.d0[1]), P = v.px(...probe), H1 = v.px(...f.d1);
+      const O = v.px(0, 0), A = v.px(a * f.d1[0], a * f.d1[1]), P = v.px(...probe), H0 = v.px(...f.d0), H1 = v.px(...f.d1);
       cross(ctx, ...O, 4, pal.muted, 1.2);
-      ctx.setLineDash([4, 4]); ctx.strokeStyle = pal.muted; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(...O); ctx.lineTo(...B); ctx.lineTo(...P); ctx.moveTo(...A); ctx.lineTo(...H1); ctx.stroke(); ctx.setLineDash([]);
-      arrow(ctx, ...O, ...A, hlc(['hx1', 'alpha', 'Ex1'], pal, pal.ramp[0]), 2.8, 10);
-      arrow(ctx, ...A, ...P, hlc(['hx0', 'sig', 'Ex0'], pal, pal.ramp[3]), 2.8, 10);
-      dot(ctx, ...H1, isHL('hx1') ? 6 : 4.5, hlc('hx1', pal, pal.ramp[0]));
-      // Score scaled by sigma^2 ends at alpha x̂1; the velocity arrow is drawn at full length.
-      ctx.setLineDash([2, 3]); arrow(ctx, ...P, ...A, hlc('st', pal, pal.fg), isHL('st') ? 2.6 : 1.4, 8); ctx.setLineDash([]);
-      const U = v.px(probe[0] + f.u[0], probe[1] + f.u[1]);
-      arrow(ctx, ...P, ...U, hlc(['hu', 'adot', 'sdot'], pal, pal.ramp[2]), 3, 11);
+      // The ray from the origin through x̂1, on which alpha x̂1 lies.
+      ctx.setLineDash([2, 4]); ctx.strokeStyle = hlc('alpha', pal, pal.muted); ctx.lineWidth = isHL('alpha') ? 2.2 : 1;
+      ctx.beginPath(); ctx.moveTo(...O); ctx.lineTo(...H1); ctx.stroke(); ctx.setLineDash([]);
+      dot(ctx, ...A, 3.5, hlc('alpha', pal, pal.muted));
+      dot(ctx, ...H0, isHL('hx0') ? 7 : 5.5, hlc('hx0', pal, pal.ramp[3]));
+      dot(ctx, ...H1, isHL('hx1') ? 7 : 5.5, hlc('hx1', pal, pal.ramp[0]));
+      // Velocity: the segment from x̂0 to x̂1, which passes through x at fraction t.
+      arrow(ctx, ...H0, ...H1, hlc(['hu', 'adot', 'sdot'], pal, pal.ramp[2]), isHL('hu') ? 4 : 3, 12);
+      // Score scaled by sigma^2: from x to alpha x̂1.
+      arrow(ctx, ...P, ...A, hlc('st', pal, pal.fg), isHL('st') ? 3 : 2, 9);
       dot(ctx, ...P, 5.5, hlc('x', pal, pal.fg));
-      tag(ctx, pal, 'x', P[0] + 10, P[1] - 10, hlc('x', pal, pal.fg), 14);
-      tag(ctx, pal, 'α_t x̂_1', (O[0] + A[0]) / 2 + 8, (O[1] + A[1]) / 2 + 18, hlc(['hx1', 'alpha'], pal, pal.ramp[0]), 13);
-      tag(ctx, pal, 'σ_t x̂_0', (A[0] + P[0]) / 2 + 8, (A[1] + P[1]) / 2 + 4, hlc(['hx0', 'sig'], pal, pal.ramp[3]), 13);
-      tag(ctx, pal, 'x̂_1', H1[0] + 8, H1[1] + 16, hlc('hx1', pal, pal.ramp[0]), 13);
-      tag(ctx, pal, 'û_t', U[0] + 8, U[1] - 6, hlc('hu', pal, pal.ramp[2]), 13);
-      tag(ctx, pal, 'dotted: σ_t² s_t, from x to α_t x̂_1', 14, h - 12, hlc('st', pal, pal.muted), 12.5);
+      // x̂0 can leave the plot for t near 1; its label then stays at the edge.
+      const inside = H0[0] > 0 && H0[0] < w && H0[1] > 0 && H0[1] < h;
+      const cl = (q, lo, hi) => Math.max(lo, Math.min(hi, q));
+      tag(ctx, pal, inside ? 'x̂_0' : 'x̂_0 is off the plot', cl(H0[0] + 10, 14, w - 150), cl(H0[1] + 18, 40, h - 34), hlc('hx0', pal, pal.ramp[3]), 13);
+      tag(ctx, pal, 'x̂_1', H1[0] + 10, H1[1] - 8, hlc('hx1', pal, pal.ramp[0]), 13);
+      tag(ctx, pal, 'x', P[0] - 10, P[1] - 10, hlc('x', pal, pal.fg), 14, 'right');
+      tag(ctx, pal, 'α_t x̂_1', A[0] + 10, A[1] + 18, hlc('alpha', pal, pal.muted), 12.5);
+      tag(ctx, pal, 'σ_t² s_t', (P[0] + A[0]) / 2 + 10, (P[1] + A[1]) / 2 - 8, hlc('st', pal, pal.fg), 12.5);
+      tag(ctx, pal, 'û_t = x̂_1 − x̂_0', 14, h - 12, hlc('hu', pal, pal.ramp[2]), 12.5);
       tag(ctx, pal, `t = ${t.toFixed(2)}`, w - 12, 22, hlc('t', pal, pal.muted), 13.5, 'right');
     }
     { const { ctx, w, h } = c1, L = 48, R = w - 150, top = 14, bot = h - 24, LMIN = -2, LMAX = 4;
@@ -373,10 +381,10 @@ function targets(viz) {
         label(ctx, `${name}: ${wf(t) < 100 ? wf(t).toFixed(2) : wf(t).toFixed(0)}`, R + 12, top + 12 + j * 18, c0, 12);
       });
       ctx.strokeStyle = hlc('t', pal, pal.muted); ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.moveTo(T(t), top); ctx.lineTo(T(t), bot); ctx.stroke(); ctx.setLineDash([]);
-      label(ctx, 'weight on ‖x̂_1 − x_1‖², log scale', L + 6, top + 10, pal.muted, 11.5);
+      label(ctx, w < 560 ? 'log scale' : 'weight on ‖x̂_1 − x_1‖², log scale', L + 6, top + 10, pal.muted, 11.5);
     }
     ro.innerHTML = `x = <b>${fmt2(probe)}</b> · t = <b>${t.toFixed(2)}</b> · x̂<sub>1</sub> = <b>${fmt2(f.d1)}</b> · x̂<sub>0</sub> = <b>${fmt2(f.d0)}</b><br>` +
-      `s<sub>t</sub> = −x̂<sub>0</sub>/σ<sub>t</sub> = <b>${fmt2(f.score)}</b> · û<sub>t</sub> = x̂<sub>1</sub> − x̂<sub>0</sub> = <b>${fmt2(f.u)}</b> · check α<sub>t</sub>x̂<sub>1</sub> + σ<sub>t</sub>x̂<sub>0</sub> = <b>${fmt2([a * f.d1[0] + s * f.d0[0], a * f.d1[1] + s * f.d0[1]])}</b>`;
+      `s<sub>t</sub> = −x̂<sub>0</sub>/σ<sub>t</sub> = <b>${fmt2(f.score)}</b> · û<sub>t</sub> = x̂<sub>1</sub> − x̂<sub>0</sub> = <b>${fmt2(f.u)}</b> · check t x̂<sub>1</sub> + (1 − t) x̂<sub>0</sub> = <b>${fmt2([a * f.d1[0] + s * f.d0[0], a * f.d1[1] + s * f.d0[1]])}</b> = x`;
   }
   return { draw };
 }
