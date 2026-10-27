@@ -106,7 +106,7 @@ export const RULES = {
   },
   riemann: {
     kind: 'rule', group: 'calc', name: 'Riemann sums',
-    tex: '\\sum_{i} f(t_{i-1})\\,\\big(g(t_i) - g(t_{i-1})\\big) \;\\longrightarrow\; \\int_0^1 f(t)\\,g\'(t)\\,\\dd t',
+    tex: '\\sum_{i} f(t_{i-1})\\,\\big(g(t_i) - g(t_{i-1})\\big) \\;\\longrightarrow\\; \\int_0^1 f(t)\\,g\'(t)\\,\\dd t',
     short: 'A sum of function values times small increments tends to an integral as the grid is refined.',
     body: [
       'Each term is the area of a thin bar of height \\(f(t_{i-1})\\) and width \\(g(t_i) - g(t_{i-1}) \\approx g\'(t_{i-1})(t_i - t_{i-1})\\). When the largest gap of the grid tends to zero, the bars fill the area under \\(f g\'\\).',
@@ -216,6 +216,16 @@ export const RULES = {
     ],
     example: '\\nabla\\log p_t(\\x\\mid\\x_1) = -\\frac{\\x - \\alpha_t\\x_1}{\\sigma_t^2}',
   },
+  'gauss-product': {
+    kind: 'rule', group: 'prob', name: 'Product of two Gaussians',
+    tex: '\\N(\\x;\\bm m_1, v_1 I)\\,\\N(\\x;\\bm m_2, v_2 I) \\propto \\N(\\x;\\bm m, v I), \\qquad \\frac1v = \\frac1{v_1} + \\frac1{v_2}, \\quad \\bm m = v\\Big(\\frac{\\bm m_1}{v_1} + \\frac{\\bm m_2}{v_2}\\Big)',
+    short: 'Multiplying two Gaussian bumps in the same variable gives a Gaussian bump. The precisions add, and the mean is the precision-weighted average of the two means.',
+    body: [
+      'Multiplying the densities adds the exponents, \\(-\\|\\x - \\bm m_1\\|^2/2v_1 - \\|\\x - \\bm m_2\\|^2/2v_2\\). Expanded, this is \\(-\\tfrac12(1/v_1 + 1/v_2)\\|\\x\\|^2 + \\x\\cdot(\\bm m_1/v_1 + \\bm m_2/v_2)\\) plus terms without \\(\\x\\).',
+      'Completing the square writes it as \\(-\\|\\x - \\bm m\\|^2/2v\\) plus a constant, with \\(1/v\\) the coefficient of \\(-\\tfrac12\\|\\x\\|^2\\) and \\(\\bm m/v\\) the coefficient of \\(\\x\\). The constant goes into the normalization, so only \\(\\bm m\\) and \\(v\\) matter.',
+    ],
+    example: '\\N(x; 0, 1)\\,\\N(x; 2, 1) \\propto \\N(x; 1, \\tfrac12)',
+  },
   kl: {
     kind: 'rule', group: 'prob', name: 'KL divergence',
     tex: '\\KL(\\rho\\,\\|\\,p) = \\int \\rho\\,\\log\\frac{\\rho}{p}\\,\\dd\\x \\;\\ge\\; 0, \\quad\\text{with equality only if } \\rho = p',
@@ -229,7 +239,7 @@ export const RULES = {
 
   jensen: {
     kind: 'rule', group: 'prob', name: 'Jensen’s inequality',
-    tex: '\\log\\E[Z] \;\\ge\; \\E[\\log Z] \\quad\\text{for a positive random variable } Z',
+    tex: '\\log\\E[Z] \\;\\ge\\; \\E[\\log Z] \\quad\\text{for a positive random variable } Z',
     short: 'The log of an average is at least the average of the logs, because the logarithm is concave.',
     body: [
       'A concave function lies above each of its chords, so it maps an average to a value at least as large as the average of the mapped values. Equality holds only if \\(Z\\) is constant.',
