@@ -274,7 +274,7 @@ function score(viz) {
   let frac = 0.35, showScore = false;
   viz.append(c.cv, controls(levelSlider(frac, (v) => { frac = v; draw(); }),
     toggle('Show \\(-\\sqrt{1-\\bar\\alpha_t}\\,\\nabla\\log p_t\\)', showScore, (on) => { showScore = on; draw(); })), ro,
-    note(`${PAIRS.n} pairs (x<sub>0</sub>, ε) of the mixture, drawn once; the level uses the schedule of step 1 with T = 1000. The circles are bin means of the labels; bins with fewer than 15 dots are left out. Both curves are exact.`));
+    note(`${PAIRS.n} pairs (x<sub>0</sub>, ε) of the mixture, drawn once; the level uses the schedule of step 1 with T = 1000. The circles are bin means of the labels; bins with fewer than 15 dots are left out. ε* is exact. The score is a central difference of log p<sub>t</sub>, so it is computed apart from ε* and the gap in the readout is a real check.`));
   function draw() {
     c.fit();
     const { ctx, w, h } = c, pal = palette();
@@ -299,14 +299,20 @@ function score(viz) {
     curve(ctx, xs.map((x) => [X(x), Y(fields(x, ab).eps)]), hlc(['epsstar', 'epsth'], pal, pal.acc), isHL('epsstar', 'epsth') ? 3.6 : 2.8);
     let md = 0;
     if (showScore) {
-      const pts = xs.map((x) => { const f = fields(x, ab), v = -s * f.score; md = Math.max(md, Math.abs(v - f.eps)); return [X(x), Y(v)]; });
-      curve(ctx, pts, hlc('score', pal, pal.fg), 2, [7, 6]);
+      // Central difference of log p_t, so the score does not reuse the formula behind eps*.
+      const H = 1e-4, raw = xs.map((x) => -(fields(x + H, ab).logp - fields(x - H, ab).logp) / (2 * H));
+      xs.forEach((x, i) => { md = Math.max(md, Math.abs(s * raw[i] - fields(x, ab).eps)); });
+      curve(ctx, xs.map((x, i) => [X(x), Y(raw[i])]), hlc('score', pal, pal.ramp[1]), 2);
+      curve(ctx, xs.map((x, i) => [X(x), Y(s * raw[i])]), hlc('score', pal, pal.fg), 3.2, [10, 10]);
     }
     ctx.restore();
     for (let b = 0; b < NB; b++) if (cnt[b] >= 15) ring(ctx, X(LO + (b + 0.5) * bw), Y(sum[b] / cnt[b]), 4, pal.ramp[3], 1.8);
     label(ctx, 'label ε of each pair (vertical) against its input x_t (horizontal)', L + 4, T - 10, hlc(['eps', 'xk'], pal, pal.muted), 12.5);
     label(ctx, 'solid: ε*(x) = E[ε | x_t = x]', L, B + 20, hlc('epsstar', pal, pal.acc), 12.5);
-    if (showScore) label(ctx, 'dashed: −√(1 − ᾱ_t) ∇log p_t(x)', R, B + 20, hlc('score', pal, pal.fg), 12.5, 'right');
+    if (showScore) {
+      label(ctx, 'dashed: −√(1 − ᾱ_t) ∇log p_t(x)', R, B + 20, hlc('score', pal, pal.fg), 12.5, 'right');
+      label(ctx, 'thin: −∇log p_t(x), before rescaling', L + 8, T + 18, hlc('score', pal, pal.ramp[1]), 12.5);
+    }
     ro.innerHTML = `t = <b>${k}</b> of ${K} · ᾱ<sub>t</sub> = <b>${fmtE(ab)}</b> · √(1 − ᾱ<sub>t</sub>) = <b>${s.toFixed(3)}</b><br>` +
       `L<sub>simple</sub> at this level: <b>${l0.toFixed(3)}</b> for ε<sub>θ</sub> = 0, <b>${lOpt.toFixed(3)}</b> for ε*` +
       (showScore ? ` · largest gap between the two curves <b>${md.toExponential(1)}</b>` : '');
